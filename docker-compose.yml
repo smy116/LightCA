@@ -2,12 +2,14 @@ version: '3.8'
 
 services:
   lightca:
-    build: ./backend
+    image: ghcr.io/smy116/lightca:latest
     container_name: lightca
     ports:
       - "8000:8000"
     volumes:
       - ./backend/data:/app/data
+    env_file:
+      - .env
     environment:
       - MASTER_KEY=${MASTER_KEY:-your-secret-master-key-min-32-chars-long}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-your-admin-password}
@@ -17,6 +19,6 @@ services:
       - CRL_VALIDITY_DAYS=7
       - HOST=0.0.0.0
       - PORT=8000
-      DEBUG=false
+      - DEBUG=false
       - LOG_LEVEL=info
     restart: unless-stopped

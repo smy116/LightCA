@@ -27,8 +27,28 @@ LightCA 是一个基于 FastAPI 的内部 PKI 工具，用于管理：
 git clone <your-repo-url>
 cd LightCA
 cp .env.example .env
-# 编辑 .env，设置 MASTER_KEY、ADMIN_PASSWORD
+# 编辑 .env，至少设置 MASTER_KEY、ADMIN_PASSWORD
 docker-compose up -d
+```
+
+`.env` 示例（可直接按需复制）：
+
+```dotenv
+# 必填
+MASTER_KEY=replace-with-a-secure-random-key-at-least-32-chars
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
+
+# 可选（覆盖 compose 默认值）
+LIGHTCA_IMAGE=ghcr.io/smy116/lightca:latest
+LIGHTCA_CONTAINER_NAME=lightca
+DB_TYPE=sqlite
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+CRL_DISTRIBUTION_URL=http://localhost:8000/public/crl
+CRL_VALIDITY_DAYS=7
+HOST=0.0.0.0
+PORT=8000
+DEBUG=false
+LOG_LEVEL=info
 ```
 
 访问地址：
@@ -68,7 +88,9 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 pytest -q
 ```
 
-CI 工作流：`.github/workflows/build.yml`（在 push/PR 时运行后端测试）。
+CI 工作流：`.github/workflows/build.yml`（在 push/PR 时执行 Docker 多平台构建，目标平台为 `linux/amd64` 和 `linux/arm64`）。
+
+默认镜像地址：`ghcr.io/<owner>/<repo>`（例如：`ghcr.io/smy116/lightca`）。
 
 ## 文档
 

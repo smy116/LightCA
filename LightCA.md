@@ -1,4 +1,4 @@
-我想构建一个基于 Docker + Python 的 Web CA 证书、密钥管理和签发平台,项目名称叫LightCA。
+构建一个基于 Docker + Python 的 Web CA 证书、密钥管理和签发平台,项目名称叫LightCA。
 
 ## 主要功能
 
