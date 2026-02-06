@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}密钥列表 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="keysPage()" x-init="load()" class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-3xl font-bold">密钥列表</h1>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body md:grid md:grid-cols-4 md:gap-3">
+            <select class="select select-bordered" x-model="algorithm" @change="load()">
+                <option value="">所有算法</option>
+                <option value="RSA">RSA</option>
+                <option value="ECDSA">ECDSA</option>
+                <option value="EdDSA">EdDSA</option>
+            </select>
+            <div class="self-center text-sm opacity-70" x-text="`总数: ${total}`"></div>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table">
+            <thead><tr><th>ID</th><th>算法</th><th>指纹</th><th>受保护</th><th>操作</th></tr></thead>
+            <tbody>
+                <template x-for="key in keys" :key="key.id">
+                    <tr>
+                        <td x-text="key.id"></td>
+                        <td x-text="key.algorithm"></td>
+                        <td class="font-mono text-xs" x-text="key.fingerprint"></td>
+                        <td><span class="badge" :class="key.is_protected ? 'badge-warning' : 'badge-ghost'" x-text="key.is_protected ? '是' : '否'"></span></td>
+                        <td class="space-x-1">
+                            <button class="btn btn-xs" @click="exportKey(key.id)">导出</button>
+                            <button class="btn btn-xs btn-error" :disabled="deletingId === key.id" @click="remove(key.id)">
+                                <span class="loading loading-spinner loading-xs" x-show="deletingId === key.id"></span>
+                                删除
+                            </button>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="keys.length === 0"><td colspan="5" class="text-center text-base-content/60">暂无密钥</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function keysPage() {
+    return {
+        keys: [],
+        deletingId: null,
+        total: 0,
+        page: 1,
+        perPage: 20,
+        algorithm: '',
+        async load() {
+            const p = new URLSearchParams({ page: this.page, per_page: this.perPage });
+            if (this.algorithm) p.set('algorithm', this.algorithm);
+            const resp = await apiFetch(`/api/keys/list?${p.toString()}`);
+            const payload = await resp.json();
+            if (payload.success) {
+                this.keys = payload.data.keys;
+                this.total = payload.data.total;
+            }
+        },
+        async exportKey(id) {
+            try {
+                await downloadWithAuth(`/api/keys/export?key_id=${id}&format=pem`);
+                notifySuccess('密钥已导出');
+            } catch (error) {
+                notifyError(error.message || '导出失败');
+            }
+        },
+        async remove(id) {
+            if (!confirmAction('确定要删除此密钥吗？')) return;
+            this.deletingId = id;
+            const resp = await apiFetch('/api/keys/delete', {
+                method: 'POST',
+                body: JSON.stringify({ key_id: id })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('密钥已删除');
+                this.load();
+            } else {
+                notifyError(payload.message || payload.error?.detail || '删除失败');
+            }
+            this.deletingId = null;
+        }
+    }
+}
+</script>
+{% endblock %}

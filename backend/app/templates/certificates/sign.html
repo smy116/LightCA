@@ -1,0 +1,695 @@
+{% extends "base.html" %}
+
+{% block title %}签署证书 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="signCertPage()" x-init="init()" class="space-y-6 max-w-7xl mx-auto pb-8">
+    <!-- Header & Template Selection -->
+    <div
+        class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-base-300 pb-4">
+        <div>
+            <h1 class="text-3xl font-bold">签署证书</h1>
+            <p class="text-base opacity-70 mt-1">创建新的数字证书或签署 CSR 请求</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+            <select class="select select-bordered w-full lg:w-64" x-model.number="templateId">
+                <option value="">-- 选择模板快速配置 --</option>
+                <template x-for="tpl in templates" :key="tpl.id">
+                    <option :value="tpl.id" x-text="`${tpl.name} (${certificateTypeLabel(tpl.template_type)})`">
+                    </option>
+                </template>
+            </select>
+            <button class="btn btn-primary" :disabled="!templateId" @click="applyTemplate()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v3.276a1 1 0 01-2 0V14.907a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                        clip-rule="evenodd" />
+                </svg>
+                应用模板
+            </button>
+        </div>
+    </div>
+
+    <!-- Template Summary Info -->
+    <div class="alert alert-info shadow-sm py-2 text-sm" x-show="templateId && templateSummary()">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span x-text="templateSummary()"></span>
+    </div>
+
+    <div class="grid xl:grid-cols-2 gap-6 items-start">
+        <!-- LEFT COLUMN: Config & Identity -->
+        <div class="space-y-6">
+
+            <!-- CARD 1: Basic Configuration -->
+            <div class="card bg-base-100 shadow-sm border border-base-200">
+                <div class="card-body">
+                    <h2 class="card-title text-lg border-b border-base-100 pb-2 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20"
+                            fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                                clip-rule="evenodd" />
+                        </svg>
+                        基础配置
+                    </h2>
+
+                    <div class="grid gap-5">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Certificate Type -->
+                            <div class="form-control">
+                                <label class="label"><span class="label-text font-medium">证书类型</span></label>
+                                <select class="select select-bordered w-full" x-model="type" :disabled="mode === 'csr'">
+                                    <option value="leaf">终端证书 (Leaf)</option>
+                                    <option value="intermediate">中间证书 (Intermediate)</option>
+                                    <option value="root">根证书 (Root)</option>
+                                </select>
+                                <label class="label py-1" x-show="mode === 'csr'">
+                                    <span class="label-text-alt opacity-60">CSR 签发固定为终端证书 (Leaf)</span>
+                                </label>
+                            </div>
+
+                            <!-- Issuer (Hidden if Root) -->
+                            <div class="form-control" x-show="type !== 'root'" x-transition>
+                                <label class="label"><span class="label-text font-medium">颁发者 CA</span></label>
+                                <select class="select select-bordered w-full" x-model.number="issuerId">
+                                    <option value="">-- 选择颁发者 --</option>
+                                    <template x-for="ca in cas" :key="ca.id">
+                                        <option :value="ca.id" x-text="`${ca.id} - ${ca.subject_cn}`"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Validity -->
+                        <div class="form-control bg-base-200/50 p-4 rounded-lg">
+                            <label class="label pt-0"><span class="label-text font-medium">有效期</span> <span
+                                    class="badge badge-neutral" x-text="`${validityDays} 天`"></span></label>
+                            <input type="range" min="1" max="7300" class="range range-primary range-sm"
+                                x-model.number="validityDays" @input="syncExpiryDateFromDays()" />
+                            <div class="w-full flex justify-between text-xs px-2 mt-2 opacity-50">
+                                <span>1天</span>
+                                <span>1年</span>
+                                <span>5年</span>
+                                <span>20年</span>
+                            </div>
+                            <div class="form-control mt-3">
+                                <label class="label py-1"><span class="label-text text-sm">到期日</span></label>
+                                <input type="date" class="input input-bordered" x-model="expiryDate" :min="todayDate()"
+                                    @change="syncValidityDaysFromExpiry()" />
+                            </div>
+                        </div>
+
+                        <!-- Subject DN -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text font-medium">主题 (Subject DN)</span>
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs opacity-70">Common Name
+                                            (CN)</span></label>
+                                    <input class="input input-bordered" x-model="subjectDn.CN" placeholder="example.com"
+                                        :disabled="mode === 'csr'" />
+                                </div>
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs opacity-70">Organization
+                                            (O)</span></label>
+                                    <input class="input input-bordered" x-model="subjectDn.O" placeholder="Example Inc."
+                                        :disabled="mode === 'csr'" />
+                                </div>
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs opacity-70">Organizational
+                                            Unit (OU)</span></label>
+                                    <input class="input input-bordered" x-model="subjectDn.OU" placeholder="IT Dept"
+                                        :disabled="mode === 'csr'" />
+                                </div>
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs opacity-70">Country
+                                            (C)</span></label>
+                                    <input class="input input-bordered" x-model="subjectDn.C" placeholder="US"
+                                        maxlength="2" :disabled="mode === 'csr'" />
+                                </div>
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs opacity-70">State/Province
+                                            (ST)</span></label>
+                                    <input class="input input-bordered" x-model="subjectDn.ST" placeholder="California"
+                                        :disabled="mode === 'csr'" />
+                                </div>
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs opacity-70">Locality
+                                            (L)</span></label>
+                                    <input class="input input-bordered" x-model="subjectDn.L"
+                                        placeholder="San Francisco" :disabled="mode === 'csr'" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SANs -->
+                        <div class="divider text-xs text-base-content/50 uppercase my-0">Subject Alternative Names</div>
+
+                        <div class="space-y-2">
+                            <template x-for="(item, index) in sanList" :key="index">
+                                <div class="flex gap-2 items-center">
+                                    <div class="join w-full flex-1 min-w-0">
+                                        <select class="join-item select select-bordered w-24" x-model="item.type">
+                                            <option value="DNS">DNS</option>
+                                            <option value="IP">IP</option>
+                                            <option value="Email">Email</option>
+                                            <option value="URI">URI</option>
+                                        </select>
+                                        <input class="join-item input input-bordered flex-1 w-full" x-model="item.value"
+                                            :placeholder="getSanPlaceholder(item.type)" />
+                                    </div>
+                                    <button class="btn btn-square btn-sm btn-ghost text-error"
+                                        @click="removeSan(index)">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20"
+                                            fill="currentColor">
+                                            <path fill-rule="evenodd"
+                                                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                                clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </template>
+                            <button class="btn btn-ghost w-full border-dashed border-base-300 gap-2" @click="addSan()">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20"
+                                    fill="currentColor">
+                                    <path fill-rule="evenodd"
+                                        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                                添加条目
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Key & Extensions -->
+        <div class="space-y-6">
+
+            <!-- CARD 3: Key Material -->
+            <div class="card bg-base-100 shadow-sm border border-base-200 overflow-visible">
+                <!-- Custom Tabs Header -->
+                <div class="flex border-b border-base-200">
+                    <button class="flex-1 py-3 font-medium text-sm transition-colors border-b-2"
+                        :class="mode === 'generate' ? 'border-primary text-primary bg-primary/5' : 'border-transparent hover:bg-base-200/50'"
+                        @click="setMode('generate')">
+                        <span class="flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                            </svg>
+                            生成密钥
+                        </span>
+                    </button>
+                    <button class="flex-1 py-3 font-medium text-sm transition-colors border-b-2"
+                        :class="mode === 'csr' ? 'border-primary text-primary bg-primary/5' : 'border-transparent hover:bg-base-200/50'"
+                        @click="setMode('csr')">
+                        <span class="flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 011.414.586l4 4a1 1 0 01.586 1.414V19a2 2 0 01-2 2z" />
+                            </svg>
+                            上传 CSR
+                        </span>
+                    </button>
+                </div>
+
+                <div class="card-body">
+
+                    <!-- TAB: Generate Mode -->
+                    <div x-show="mode === 'generate'" x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 translate-y-2"
+                        x-transition:enter-end="opacity-100 translate-y-0" class="space-y-4">
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text font-medium">算法</span></label>
+                            <select class="select select-bordered w-full" x-model="algorithm">
+                                <option value="RSA">RSA</option>
+                                <option value="ECDSA">ECDSA</option>
+                                <option value="EdDSA">EdDSA</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4 bg-base-200/30 p-4 rounded-box">
+                            <!-- RSA Options -->
+                            <div x-show="algorithm === 'RSA'" class="form-control">
+                                <label class="label"><span class="label-text text-sm">RSA 密钥长度 (Bits)</span></label>
+                                <div class="join w-full">
+                                    <input class="join-item btn w-1/2" type="radio" name="rsa_size"
+                                        :checked="keySize === 2048" @click="keySize = 2048" aria-label="2048" />
+                                    <input class="join-item btn w-1/2" type="radio" name="rsa_size"
+                                        :checked="keySize === 4096" @click="keySize = 4096" aria-label="4096" />
+                                </div>
+                            </div>
+
+                            <!-- ECDSA Options -->
+                            <div x-show="algorithm === 'ECDSA'" class="form-control">
+                                <label class="label"><span class="label-text text-sm">椭圆曲线</span></label>
+                                <div class="join w-full">
+                                    <input class="join-item btn w-1/2" type="radio" name="ecdsa_curve"
+                                        :checked="curve === 'P-256'" @click="curve = 'P-256'" aria-label="P-256" />
+                                    <input class="join-item btn w-1/2" type="radio" name="ecdsa_curve"
+                                        :checked="curve === 'P-384'" @click="curve = 'P-384'" aria-label="P-384" />
+                                </div>
+                            </div>
+
+                            <!-- EdDSA Options -->
+                            <div x-show="algorithm === 'EdDSA'" class="form-control">
+                                <label class="label"><span class="label-text text-sm">EdDSA 曲线</span></label>
+                                <div class="join w-full">
+                                    <input class="join-item btn w-1/2" type="radio" name="eddsa_curve"
+                                        :checked="curve === 'Ed25519'" @click="curve = 'Ed25519'"
+                                        aria-label="Ed25519" />
+                                    <input class="join-item btn w-1/2" type="radio" name="eddsa_curve"
+                                        :checked="curve === 'Ed448'" @click="curve = 'Ed448'" aria-label="Ed448" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text font-medium">私钥密码保护 (可选)</span></label>
+                            <input type="password" class="input input-bordered w-full" x-model="keyPassword"
+                                placeholder="留空则不加密私钥" autocomplete="new-password" />
+                            <label class="label cursor-pointer justify-start gap-2 mt-2">
+                                <input type="checkbox" class="checkbox checkbox-sm checkbox-primary"
+                                    x-model="rememberKeyPassword" />
+                                <span class="label-text text-sm">在服务器端记住密码 (不推荐用于生产)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- TAB: CSR Mode -->
+                    <div x-show="mode === 'csr'" x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 translate-y-2"
+                        x-transition:enter-end="opacity-100 translate-y-0" class="space-y-4">
+                        <div class="form-control">
+                            <label class="label"><span class="label-text font-medium">上传 CSR 文件</span></label>
+                            <input type="file" accept=".pem,.csr,.txt" class="file-input file-input-bordered w-full"
+                                @change="onCsrFileChange($event)" />
+                        </div>
+
+                        <div class="form-control">
+                            <label class="label"><span class="label-text font-medium">粘贴 PEM 内容</span></label>
+                            <textarea class="textarea textarea-bordered w-full h-60 font-mono text-xs leading-tight"
+                                x-model="csrPem" placeholder="-----BEGIN CERTIFICATE REQUEST-----..."></textarea>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD 4: Advanced Extensions -->
+            <div class="collapse collapse-arrow bg-base-100 shadow-sm border border-base-200">
+                <input type="checkbox" />
+                <div class="collapse-title text-lg font-medium flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20"
+                        fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
+                            clip-rule="evenodd" />
+                    </svg>
+                    高级扩展 (Extensions)
+                </div>
+                <div class="collapse-content space-y-4">
+                    <fieldset class="space-y-4" :disabled="mode === 'csr'">
+                        <!-- Path Length (CA only) -->
+                        <div x-show="type !== 'leaf'" class="form-control bg-base-200 p-3 rounded-lg">
+                            <label class="label py-1"><span class="label-text font-medium">路径长度限制 (Path
+                                    Length)</span></label>
+                            <input type="number" min="0" class="input input-bordered w-full" x-model.number="pathLength"
+                                placeholder="留空表示无限制" />
+                            <label class="label py-0"><span class="label-text-alt opacity-60">限制下级 CA 的层深</span></label>
+                        </div>
+
+                        <!-- Key Usage -->
+                        <div>
+                            <div class="label"><span class="label-text font-bold opacity-80">密钥用途 (Key Usage)</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="kuDigitalSignature" />
+                                    <span>Digital Signature</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="kuKeyEncipherment" />
+                                    <span>Key Encipherment</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="kuKeyCertSign" />
+                                    <span>Key Cert Sign</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="kuCrlSign" /> <span>CRL
+                                        Sign</span></label>
+                            </div>
+                        </div>
+
+                        <div class="divider my-0"></div>
+
+                        <!-- Extended Key Usage -->
+                        <div>
+                            <div class="label"><span class="label-text font-bold opacity-80">增强密钥用途 (Extended Key
+                                    Usage)</span></div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="ekuServerAuth" />
+                                    <span>Server Auth</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="ekuClientAuth" />
+                                    <span>Client Auth</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="ekuCodeSigning" />
+                                    <span>Code Signing</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="ekuEmailProtection" />
+                                    <span>Email Protection</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="ekuTimeStamping" />
+                                    <span>Time Stamping</span></label>
+                                <label
+                                    class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1"><input
+                                        type="checkbox" class="checkbox checkbox-xs" x-model="ekuOcspSigning" />
+                                    <span>OCSP Signing</span></label>
+                            </div>
+                        </div>
+                    </fieldset>
+                    <div class="label py-1" x-show="mode === 'csr'">
+                        <span class="label-text-alt opacity-60">CSR 模式下高级扩展已禁用</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Action -->
+    <div class="space-y-2">
+        <div class="text-success text-sm font-medium" x-show="successMsg" x-text="successMsg"></div>
+        <button class="btn btn-primary btn-block" :disabled="loading" @click="submit()">
+            <span class="loading loading-spinner" x-show="loading"></span>
+            <span x-show="!loading">立即签署</span>
+        </button>
+    </div>
+
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function signCertPage() {
+        return {
+            loading: false,
+            mode: 'generate',
+            type: 'leaf',
+            issuerId: '',
+            subjectDn: { CN: '', O: '', OU: '', C: '', ST: '', L: '' },
+            validityDays: 365,
+            expiryDate: '',
+            algorithm: 'RSA',
+            keySize: 2048,
+            curve: 'P-256',
+            keyPassword: '',
+            rememberKeyPassword: false,
+            csrPem: '',
+            cas: [],
+            templates: [],
+            templateId: '',
+            successMsg: '',
+            errorMsg: '',
+            sanList: [{ type: 'DNS', value: '' }],
+            kuDigitalSignature: true,
+            kuKeyEncipherment: true,
+            kuKeyCertSign: false,
+            kuCrlSign: false,
+            ekuServerAuth: true,
+            ekuClientAuth: true,
+            ekuCodeSigning: false,
+            ekuEmailProtection: false,
+            ekuTimeStamping: false,
+            ekuOcspSigning: false,
+            pathLength: null,
+            async init() {
+                await this.reloadOptions();
+                this.syncExpiryDateFromDays();
+            },
+            async reloadOptions() {
+                try {
+                    const [caResp, tplResp] = await Promise.all([
+                        apiFetch('/api/certificates/list?per_page=100'),
+                        apiFetch('/api/templates/list?per_page=100')
+                    ]);
+                    const caPayload = await caResp.json();
+                    const tplPayload = await tplResp.json();
+
+                    const allCertificates = caPayload.success ? caPayload.data.certificates : [];
+                    this.cas = allCertificates.filter((cert) => {
+                        const type = String(cert.type || '').toLowerCase();
+                        const status = String(cert.status || '').toLowerCase();
+                        const isCa = type.includes('root') || type.includes('intermediate');
+                        return isCa && status === 'valid';
+                    });
+                    if (tplPayload.success) this.templates = tplPayload.data.templates;
+                } catch (e) {
+                    console.error("Failed to load options", e);
+                    notifyError("加载选项失败");
+                }
+            },
+            setMode(nextMode) {
+                this.mode = nextMode;
+                if (nextMode === 'generate') return;
+                this.type = 'leaf';
+                this.pathLength = null;
+                this.kuKeyCertSign = false;
+                this.kuCrlSign = false;
+                this.keyPassword = '';
+                this.rememberKeyPassword = false;
+            },
+            addSan() {
+                this.sanList.push({ type: 'DNS', value: '' });
+            },
+            removeSan(index) {
+                this.sanList.splice(index, 1);
+            },
+            getSanPlaceholder(type) {
+                const placeholders = {
+                    'DNS': 'example.com',
+                    'IP': '10.0.0.1',
+                    'Email': 'admin@example.com',
+                    'URI': 'spiffe://example.org/service'
+                };
+                return placeholders[type] || '';
+            },
+            parseSubjectDn(dnStr) {
+                const result = { CN: '', O: '', OU: '', C: '', ST: '', L: '' };
+                if (!dnStr) return result;
+                const parts = dnStr.split(',');
+                parts.forEach(part => {
+                    const [key, ...valParts] = part.split('=');
+                    const val = valParts.join('=');
+                    const trimKey = key ? key.trim().toUpperCase() : '';
+                    const trimVal = val ? val.trim() : '';
+                    if (Object.hasOwn(result, trimKey)) {
+                        result[trimKey] = trimVal;
+                    }
+                });
+                return result;
+            },
+            normalizeTemplateType(templateType) {
+                const normalized = String(templateType || '').toLowerCase();
+                if (['root', 'intermediate', 'leaf'].includes(normalized)) return normalized;
+                return 'leaf';
+            },
+            applyTemplate() {
+                const selected = this.templates.find((tpl) => Number(tpl.id) === Number(this.templateId));
+                if (!selected) return;
+
+                const policy = selected.policy || {};
+                const keyUsage = selected.key_usage || {};
+                const extKeyUsage = selected.extended_key_usage || {};
+
+                this.type = this.normalizeTemplateType(selected.template_type);
+                this.mode = 'generate';
+                if (policy.subject_dn) {
+                    this.subjectDn = this.parseSubjectDn(policy.subject_dn);
+                }
+                if (policy.validity_days) this.validityDays = Number(policy.validity_days);
+                this.syncExpiryDateFromDays();
+                const templateAlgorithm = policy.key_algorithm || keyUsage.key_algorithm || keyUsage.algorithm;
+                const templateKeySize = policy.key_size || keyUsage.key_size;
+                const templateCurve = policy.key_curve || keyUsage.key_curve || keyUsage.curve;
+
+                if (templateAlgorithm) this.algorithm = templateAlgorithm;
+                if (templateKeySize) this.keySize = Number(templateKeySize);
+                if (templateCurve) this.curve = templateCurve;
+
+                if (Object.hasOwn(keyUsage, 'digital_signature')) this.kuDigitalSignature = Boolean(keyUsage.digital_signature);
+                if (Object.hasOwn(keyUsage, 'key_encipherment')) this.kuKeyEncipherment = Boolean(keyUsage.key_encipherment);
+                if (Object.hasOwn(keyUsage, 'key_cert_sign')) this.kuKeyCertSign = Boolean(keyUsage.key_cert_sign);
+                if (Object.hasOwn(keyUsage, 'crl_sign')) this.kuCrlSign = Boolean(keyUsage.crl_sign);
+
+                if (Object.hasOwn(extKeyUsage, 'server_auth')) this.ekuServerAuth = Boolean(extKeyUsage.server_auth);
+                if (Object.hasOwn(extKeyUsage, 'client_auth')) this.ekuClientAuth = Boolean(extKeyUsage.client_auth);
+                if (Object.hasOwn(extKeyUsage, 'code_signing')) this.ekuCodeSigning = Boolean(extKeyUsage.code_signing);
+                if (Object.hasOwn(extKeyUsage, 'email_protection')) this.ekuEmailProtection = Boolean(extKeyUsage.email_protection);
+                if (Object.hasOwn(extKeyUsage, 'time_stamping')) this.ekuTimeStamping = Boolean(extKeyUsage.time_stamping);
+                if (Object.hasOwn(extKeyUsage, 'ocsp_signing')) this.ekuOcspSigning = Boolean(extKeyUsage.ocsp_signing);
+
+                notifySuccess(`模板 "${selected.name}" 已应用`);
+            },
+            templateSummary() {
+                const selected = this.templates.find((tpl) => Number(tpl.id) === Number(this.templateId));
+                if (!selected) return '';
+                const policy = selected.policy || {};
+                const keyUsage = selected.key_usage || {};
+                const summaryAlgorithm = policy.key_algorithm || keyUsage.key_algorithm || keyUsage.algorithm || '-';
+                return `模板: ${selected.name} | 有效期: ${policy.validity_days || '-'} 天 | 算法: ${summaryAlgorithm}`;
+            },
+            async onCsrFileChange(event) {
+                const [file] = event.target.files || [];
+                if (!file) return;
+                this.csrPem = await file.text();
+            },
+            toDateInputValue(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+            todayDate() {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                return this.toDateInputValue(now);
+            },
+            syncExpiryDateFromDays() {
+                const days = Math.max(1, Math.min(7300, Number(this.validityDays) || 1));
+                this.validityDays = days;
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                now.setDate(now.getDate() + days);
+                this.expiryDate = this.toDateInputValue(now);
+            },
+            syncValidityDaysFromExpiry() {
+                if (!this.expiryDate) {
+                    this.syncExpiryDateFromDays();
+                    return;
+                }
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const target = new Date(`${this.expiryDate}T00:00:00`);
+                const diffMs = target.getTime() - now.getTime();
+                const diffDays = Math.ceil(diffMs / 86400000);
+                this.validityDays = Math.max(1, Math.min(7300, diffDays));
+                this.syncExpiryDateFromDays();
+            },
+            buildExtensions() {
+                const ext = {};
+                const san = {};
+
+                this.sanList.forEach(item => {
+                    if (!item.value) return;
+                    const type = item.type.toLowerCase();
+                    if (!san[type]) san[type] = [];
+                    const values = item.value.split(',').map(v => v.trim()).filter(v => v);
+                    san[type].push(...values);
+                });
+
+                if (Object.keys(san).length > 0) ext.san = san;
+
+                ext.key_usage = {
+                    digital_signature: this.kuDigitalSignature,
+                    content_commitment: false,
+                    key_encipherment: this.kuKeyEncipherment,
+                    data_encipherment: false,
+                    key_agreement: false,
+                    key_cert_sign: this.kuKeyCertSign,
+                    crl_sign: this.kuCrlSign,
+                    encipher_only: false,
+                    decipher_only: false,
+                };
+
+                ext.extended_key_usage = {
+                    server_auth: this.ekuServerAuth,
+                    client_auth: this.ekuClientAuth,
+                    code_signing: this.ekuCodeSigning,
+                    email_protection: this.ekuEmailProtection,
+                    time_stamping: this.ekuTimeStamping,
+                    ocsp_signing: this.ekuOcspSigning,
+                };
+
+                if (this.type !== 'leaf') {
+                    ext.is_ca = true;
+                    if (Number.isInteger(this.pathLength) && this.pathLength >= 0) {
+                        ext.path_length = this.pathLength;
+                    }
+                }
+
+                return ext;
+            },
+            async submit() {
+                this.loading = true;
+                this.successMsg = '';
+                this.errorMsg = '';
+
+                const effectiveType = this.mode === 'csr' ? 'leaf' : this.type;
+                const body = {
+                    type: effectiveType,
+                    subject: this.subjectDn,
+                    validity_days: this.validityDays,
+                    is_ca: effectiveType !== 'leaf',
+                    extensions: this.buildExtensions(),
+                    key_config: this.mode === 'generate'
+                        ? {
+                            algorithm: this.algorithm,
+                            key_size: this.algorithm === 'RSA' ? this.keySize : null,
+                            curve: this.algorithm !== 'RSA' ? this.curve : null,
+                            password: this.keyPassword || null,
+                            remember_password: this.rememberKeyPassword,
+                        }
+                        : null,
+                };
+
+                if (effectiveType !== 'root') body.issuer_id = this.issuerId;
+                if (this.mode === 'csr') body.csr_pem = this.csrPem;
+
+                try {
+                    const resp = await apiFetch('/api/certificates/sign', {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    const payload = await resp.json();
+                    if (payload.success) {
+                        this.successMsg = `签署成功。证书 ID: ${payload.data.certificate_id}`;
+                        notifySuccess(this.successMsg);
+                        // Optional: redirect or reset
+                        setTimeout(() => {
+                            window.location.href = `/certificates/detail/${payload.data.certificate_id}`;
+                        }, 1000);
+                    } else {
+                        this.errorMsg = payload.message || payload.error?.detail || '签署失败';
+                        notifyError(this.errorMsg);
+                    }
+                } catch {
+                    this.errorMsg = "网络错误或服务器异常";
+                    notifyError(this.errorMsg);
+                }
+                this.loading = false;
+            }
+        }
+    }
+</script>
+{% endblock %}

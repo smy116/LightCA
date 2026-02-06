@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}CRL 管理 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="crlPage()" x-init="init()" class="space-y-4">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold">CRL 管理</h1>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body md:grid md:grid-cols-3 md:gap-3">
+            <select class="select select-bordered" x-model.number="caId">
+                <option value="">选择 CA</option>
+                <template x-for="ca in cas" :key="ca.id">
+                    <option :value="ca.id" x-text="`${ca.id} - ${ca.subject_cn}`"></option>
+                </template>
+            </select>
+            <button class="btn btn-primary" :disabled="!caId || generating" @click="generate()">
+                <span class="loading loading-spinner" x-show="generating"></span>
+                生成 CRL
+            </button>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table">
+            <thead><tr><th>ID</th><th>CA ID</th><th>CRL 编号</th><th>生成时间</th><th>操作</th></tr></thead>
+            <tbody>
+                <template x-for="crl in crls" :key="crl.id">
+                    <tr>
+                        <td x-text="crl.id"></td>
+                        <td x-text="crl.ca_id"></td>
+                        <td x-text="crl.crl_number"></td>
+                        <td x-text="(crl.generated_at || '').replace('T',' ').slice(0,19)"></td>
+                        <td>
+                            <button class="btn btn-xs" @click="download(crl.id)">下载</button>
+                            <a class="btn btn-xs" :href="`/crl/revocations?crl_id=${crl.id}`">吊销列表</a>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="crls.length === 0"><td colspan="5" class="text-center text-base-content/60">暂无 CRL 记录</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function crlPage() {
+    return {
+        cas: [],
+        crls: [],
+        caId: '',
+        generating: false,
+        async init() {
+            const [caResp, crlResp] = await Promise.all([
+                apiFetch('/api/certificates/list?cert_type=root&per_page=100'),
+                apiFetch('/api/crl/list?per_page=200')
+            ]);
+            const caPayload = await caResp.json();
+            const crlPayload = await crlResp.json();
+            if (caPayload.success) this.cas = caPayload.data.certificates;
+            if (crlPayload.success) this.crls = crlPayload.data.crls;
+        },
+        async download(crlId) {
+            try {
+                await downloadWithAuth(`/api/crl/download?crl_id=${crlId}`);
+                notifySuccess('CRL 已下载');
+            } catch (error) {
+                notifyError(error.message || '下载失败');
+            }
+        },
+        async generate() {
+            this.generating = true;
+            const resp = await apiFetch('/api/crl/generate', {
+                method: 'POST',
+                body: JSON.stringify({ ca_id: this.caId })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess(`CRL 已生成: ${payload.data.crl_id}`);
+                await this.init();
+            } else {
+                notifyError(payload.message || payload.error?.detail || '生成 CRL 失败');
+            }
+            this.generating = false;
+        }
+    }
+}
+</script>
+{% endblock %}

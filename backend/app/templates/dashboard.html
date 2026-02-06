@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}仪表盘 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="dashboardPage()" x-init="load()" class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold">仪表盘</h1>
+        <div class="text-sm text-base-content/70">证书和吊销状态概览</div>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-sm opacity-70">CA 证书</p>
+                <p class="text-3xl font-semibold" x-text="stats.certificates.ca_total"></p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-sm opacity-70">证书总数</p>
+                <p class="text-3xl font-semibold" x-text="stats.certificates.total"></p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-sm opacity-70">即将过期 (30天)</p>
+                <p class="text-3xl font-semibold" x-text="stats.certificates.expiring"></p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-sm opacity-70">模板</p>
+                <p class="text-3xl font-semibold" x-text="stats.templates.total"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <a class="btn btn-primary" href="/certificates/sign"><i class="ph ph-pen-nib"></i>签署证书</a>
+        <a class="btn btn-secondary" href="/ca"><i class="ph ph-tree-structure"></i>管理 CA</a>
+        <a class="btn btn-accent" href="/keys"><i class="ph ph-key"></i>密钥管理</a>
+        <a class="btn btn-neutral" href="/crl"><i class="ph ph-list-dashes"></i>CRL 管理</a>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex items-center justify-between">
+                <h2 class="card-title">最近活动</h2>
+                <a class="btn btn-ghost btn-sm" href="/certificates">查看全部</a>
+            </div>
+            <ul class="menu rounded-box">
+                <template x-for="item in recent" :key="item.id">
+                    <li>
+                        <a :href="`/certificates/detail?certificate_id=${item.id}`" class="flex items-center justify-between gap-3">
+                            <span class="truncate">
+                                <span class="font-medium" x-text="item.subject_cn || '未命名证书'"></span>
+                                <span class="text-xs opacity-60 ml-2" x-text="`#${item.id}`"></span>
+                            </span>
+                            <span class="badge" :class="statusBadgeClass(item.status)" x-text="certificateStatusLabel(item.status)"></span>
+                        </a>
+                    </li>
+                </template>
+                <li x-show="recent.length === 0"><span class="text-base-content/60">暂无最近证书活动。</span></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="alert alert-error" x-show="error" x-text="error"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dashboardPage() {
+    return {
+        loading: false,
+        error: '',
+        stats: {
+            certificates: { total: 0, ca_total: 0, expiring: 0, revoked: 0 },
+            keys: { total: 0 },
+            templates: { total: 0 },
+            crls: { total: 0 }
+        },
+        recent: [],
+        async load() {
+            this.loading = true;
+            this.error = '';
+            try {
+                const [response, recentResp] = await Promise.all([
+                    apiFetch('/api/stats'),
+                    apiFetch('/api/certificates/list?page=1&per_page=6&sort_by=created_at&sort_order=desc')
+                ]);
+                const payload = await response.json();
+                if (payload.success) {
+                    this.stats = payload.data;
+                }
+
+                const recentPayload = await recentResp.json();
+                if (recentPayload.success) {
+                    this.recent = recentPayload.data.certificates || [];
+                }
+            } catch (error) {
+                this.error = error.message || '加载仪表盘失败';
+                notifyError(this.error);
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

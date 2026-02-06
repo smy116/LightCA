@@ -1,0 +1,11 @@
+{% macro row(field_id, value, placeholder='') -%}
+<div class="join w-full">
+  <input
+    id="{{ field_id }}"
+    class="input input-bordered join-item w-full font-mono"
+    readonly
+    value="{{ value or placeholder }}"
+  />
+  <button class="btn join-item" type="button" data-copy-target="{{ field_id }}">复制</button>
+</div>
+{%- endmacro %}

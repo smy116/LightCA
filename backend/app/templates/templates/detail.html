@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}模板详情 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="templateDetailPage()" x-init="load()" class="space-y-4">
+    <h1 class="text-3xl font-bold">模板详情</h1>
+    <div class="card bg-base-100 shadow-sm" x-show="template">
+        <div class="card-body">
+            <p><span class="font-semibold">ID:</span> <span x-text="template?.id"></span></p>
+            <p><span class="font-semibold">名称:</span> <span x-text="template?.name"></span></p>
+            <p><span class="font-semibold">类型:</span> <span x-text="certificateTypeLabel(template?.template_type)"></span></p>
+
+            <div class="grid gap-3 md:grid-cols-3">
+                <div class="rounded-lg bg-base-200 p-3">
+                    <p class="text-xs opacity-70 mb-1">证书策略</p>
+                    <pre class="text-xs overflow-auto" x-text="JSON.stringify(template?.policy || {}, null, 2)"></pre>
+                </div>
+                <div class="rounded-lg bg-base-200 p-3">
+                    <p class="text-xs opacity-70 mb-1">Key Usage</p>
+                    <pre class="text-xs overflow-auto" x-text="JSON.stringify(template?.key_usage || {}, null, 2)"></pre>
+                </div>
+                <div class="rounded-lg bg-base-200 p-3">
+                    <p class="text-xs opacity-70 mb-1">Extended Key Usage</p>
+                    <pre class="text-xs overflow-auto" x-text="JSON.stringify(template?.extended_key_usage || {}, null, 2)"></pre>
+                </div>
+            </div>
+            <div class="join">
+                <a class="btn join-item" href="/templates">返回</a>
+                <button class="btn join-item btn-error" x-show="template" @click="remove()">删除</button>
+            </div>
+        </div>
+    </div>
+    <div class="alert alert-error" x-show="error" x-text="error"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function templateDetailPage() {
+    return {
+        templateId: null,
+        template: null,
+        error: '',
+        async load() {
+            this.templateId = new URLSearchParams(window.location.search).get('template_id');
+            if (!this.templateId) {
+                this.error = '缺少 template_id';
+                return;
+            }
+            const resp = await apiFetch(`/api/templates/detail?template_id=${this.templateId}`);
+            const payload = await resp.json();
+            if (payload.success) this.template = payload.data;
+            else this.error = payload.message || payload.error?.detail || '加载失败';
+        },
+        async remove() {
+            if (!confirmAction('确定要删除此模板吗？')) return;
+            const resp = await apiFetch('/api/templates/delete', {
+                method: 'POST',
+                body: JSON.stringify({ template_id: Number(this.templateId) })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('模板已删除');
+                window.location.href = '/templates';
+            } else {
+                this.error = payload.message || payload.error?.detail || '删除失败';
+                notifyError(this.error);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+
+{% block title %}创建模板 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="createTemplatePage()" x-init="init()" class="space-y-6 max-w-5xl mx-auto pb-8">
+    <!-- Header -->
+    <div class="border-b border-base-300 pb-4">
+        <h1 class="text-3xl font-bold">创建模板</h1>
+        <p class="text-base opacity-70 mt-1">定义证书颁发的默认策略和配置</p>
+    </div>
+
+    <!-- Single Card Container -->
+    <div class="card bg-base-100 shadow-sm border border-base-200">
+        <div class="card-body space-y-8">
+            
+            <!-- SECTION 1: Template Info -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-bold flex items-center gap-2 pb-2 border-b border-base-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                    </svg>
+                    模板基础信息
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-control md:col-span-2">
+                        <label class="label"><span class="label-text font-medium">模板名称 <span class="text-error">*</span></span></label>
+                        <input type="text" class="input input-bordered w-full" x-model="name" placeholder="例如: Web Server Production" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text font-medium">证书类型</span></label>
+                        <select class="select select-bordered w-full" x-model="type">
+                            <option value="leaf">终端证书 (Leaf)</option>
+                            <option value="intermediate">中间证书 (Intermediate)</option>
+                            <option value="root">根证书 (Root)</option>
+                        </select>
+                    </div>
+                    <div class="form-control md:col-span-2">
+                        <label class="label"><span class="label-text font-medium">描述</span></label>
+                        <textarea class="textarea textarea-bordered h-20" x-model="description" placeholder="此模板的用途说明..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Subject DN -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-bold flex items-center gap-2 pb-2 border-b border-base-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                    </svg>
+                    默认主题 (Subject DN)
+                </h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs opacity-70">Common Name (CN)</span></label>
+                        <input class="input input-bordered" x-model="subjectDn.CN" placeholder="example.com" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs opacity-70">Organization (O)</span></label>
+                        <input class="input input-bordered" x-model="subjectDn.O" placeholder="Example Inc." />
+                    </div>
+                    <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs opacity-70">Organizational Unit (OU)</span></label>
+                        <input class="input input-bordered" x-model="subjectDn.OU" placeholder="IT Dept" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs opacity-70">Country (C)</span></label>
+                        <input class="input input-bordered" x-model="subjectDn.C" placeholder="US" maxlength="2" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs opacity-70">State/Province (ST)</span></label>
+                        <input class="input input-bordered" x-model="subjectDn.ST" placeholder="California" />
+                    </div>
+                    <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs opacity-70">Locality (L)</span></label>
+                        <input class="input input-bordered" x-model="subjectDn.L" placeholder="San Francisco" />
+                    </div>
+                </div>
+                <div class="text-xs text-base-content/50">
+                    注: 此处设置的值将作为使用此模板时的默认值。
+                </div>
+            </div>
+
+            <!-- SECTION 3: Validity -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-bold flex items-center gap-2 pb-2 border-b border-base-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                    </svg>
+                    默认有效期
+                </h2>
+                <div class="form-control bg-base-200/50 p-4 rounded-lg">
+                    <div class="flex flex-col md:flex-row gap-6 items-center">
+                        <div class="flex-1 w-full">
+                            <label class="label pt-0"><span class="label-text font-medium">有效期</span> <span class="badge badge-neutral" x-text="`${validityDays} 天`"></span></label>
+                            <input type="range" min="1" max="7300" class="range range-primary range-sm" x-model.number="validityDays" @input="syncExpiryDateFromDays()" />
+                            <div class="w-full flex justify-between text-xs px-2 mt-2 opacity-50">
+                                <span>1天</span>
+                                <span>1年</span>
+                                <span>5年</span>
+                                <span>20年</span>
+                            </div>
+                        </div>
+                        <div class="form-control w-full md:w-auto min-w-[200px]">
+                            <label class="label py-1"><span class="label-text text-sm">参考到期日</span></label>
+                            <input type="date" class="input input-bordered" x-model="expiryDate" :min="todayDate()" @change="syncValidityDaysFromExpiry()" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4: Key Config -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-bold flex items-center gap-2 pb-2 border-b border-base-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                    </svg>
+                    密钥配置
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text font-medium">算法</span></label>
+                        <select class="select select-bordered w-full" x-model="algorithm">
+                            <option value="RSA">RSA</option>
+                            <option value="ECDSA">ECDSA</option>
+                            <option value="EdDSA">EdDSA</option>
+                        </select>
+                    </div>
+                    <div class="form-control bg-base-200/30 p-4 rounded-box">
+                         <!-- RSA Options -->
+                         <div x-show="algorithm === 'RSA'" class="form-control">
+                            <label class="label"><span class="label-text text-sm">RSA 密钥长度 (Bits)</span></label>
+                            <div class="join w-full">
+                                <input class="join-item btn btn-sm w-1/2" type="radio" name="rsa_size" :checked="keySize === 2048" @click="keySize = 2048" aria-label="2048" />
+                                <input class="join-item btn btn-sm w-1/2" type="radio" name="rsa_size" :checked="keySize === 4096" @click="keySize = 4096" aria-label="4096" />
+                            </div>
+                        </div>
+                        <!-- ECDSA Options -->
+                        <div x-show="algorithm === 'ECDSA'" class="form-control">
+                            <label class="label"><span class="label-text text-sm">椭圆曲线</span></label>
+                            <div class="join w-full">
+                                <input class="join-item btn btn-sm w-1/2" type="radio" name="ecdsa_curve" :checked="curve === 'P-256'" @click="curve = 'P-256'" aria-label="P-256" />
+                                <input class="join-item btn btn-sm w-1/2" type="radio" name="ecdsa_curve" :checked="curve === 'P-384'" @click="curve = 'P-384'" aria-label="P-384" />
+                            </div>
+                        </div>
+                        <!-- EdDSA Options -->
+                        <div x-show="algorithm === 'EdDSA'" class="form-control">
+                            <label class="label"><span class="label-text text-sm">EdDSA 曲线</span></label>
+                            <div class="join w-full">
+                                <input class="join-item btn btn-sm w-1/2" type="radio" name="eddsa_curve" :checked="curve === 'Ed25519'" @click="curve = 'Ed25519'" aria-label="Ed25519" />
+                                <input class="join-item btn btn-sm w-1/2" type="radio" name="eddsa_curve" :checked="curve === 'Ed448'" @click="curve = 'Ed448'" aria-label="Ed448" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 5: Usage & Extensions -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-bold flex items-center gap-2 pb-2 border-b border-base-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-70" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+                    </svg>
+                    用途与扩展
+                </h2>
+                
+                <!-- Path Length (Conditional) -->
+                <div x-show="type !== 'leaf'" x-transition class="form-control bg-base-200 p-3 rounded-lg mb-4">
+                    <label class="label py-1"><span class="label-text font-medium">路径长度限制 (Path Length)</span></label>
+                    <input type="number" min="0" class="input input-bordered w-full" x-model.number="pathLength" placeholder="留空表示无限制" />
+                    <label class="label py-0"><span class="label-text-alt opacity-60">限制下级 CA 的层深</span></label>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Key Usage -->
+                    <div>
+                        <div class="label"><span class="label-text font-bold opacity-80 border-b border-base-200 w-full pb-1">密钥用途 (Key Usage)</span></div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mt-2">
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="kuDigitalSignature" />
+                                <span>Digital Signature</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="kuKeyEncipherment" />
+                                <span>Key Encipherment</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="kuKeyCertSign" />
+                                <span>Key Cert Sign</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="kuCrlSign" />
+                                <span>CRL Sign</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Extended Key Usage -->
+                    <div>
+                        <div class="label"><span class="label-text font-bold opacity-80 border-b border-base-200 w-full pb-1">增强密钥用途 (Extended Key Usage)</span></div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mt-2">
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="ekuServerAuth" />
+                                <span>Server Auth</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="ekuClientAuth" />
+                                <span>Client Auth</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="ekuCodeSigning" />
+                                <span>Code Signing</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="ekuEmailProtection" />
+                                <span>Email Protection</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="ekuTimeStamping" />
+                                <span>Time Stamping</span>
+                            </label>
+                            <label class="cursor-pointer label justify-start gap-3 hover:bg-base-200 rounded p-1">
+                                <input type="checkbox" class="checkbox checkbox-xs" x-model="ekuOcspSigning" />
+                                <span>OCSP Signing</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Action -->
+            <div class="flex flex-col gap-4">
+                <div class="text-success text-sm font-medium text-center" x-show="successMsg" x-text="successMsg"></div>
+                <button class="btn btn-primary btn-block btn-lg" :disabled="loading || !name" @click="submit()">
+                    <span class="loading loading-spinner" x-show="loading"></span>
+                    <span x-show="!loading">立即创建模板</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function createTemplatePage() {
+        return {
+            loading: false,
+            name: '',
+            description: '',
+            type: 'leaf',
+            subjectDn: { CN: '', O: '', OU: '', C: '', ST: '', L: '' },
+            validityDays: 365,
+            expiryDate: '',
+            algorithm: 'RSA',
+            keySize: 2048,
+            curve: 'P-256',
+            
+            // Key Usage
+            kuDigitalSignature: true,
+            kuKeyEncipherment: true,
+            kuKeyCertSign: false,
+            kuCrlSign: false,
+            
+            // Extended Key Usage
+            ekuServerAuth: true,
+            ekuClientAuth: true,
+            ekuCodeSigning: false,
+            ekuEmailProtection: false,
+            ekuTimeStamping: false,
+            ekuOcspSigning: false,
+            
+            pathLength: null,
+            successMsg: '',
+            errorMsg: '',
+
+            init() {
+                this.syncExpiryDateFromDays();
+                
+                // Watch for type changes to adjust defaults
+                this.$watch('type', (value) => {
+                    if (value === 'leaf') {
+                        this.kuKeyCertSign = false;
+                        this.kuCrlSign = false;
+                        this.pathLength = null;
+                    } else {
+                        // For CA types, default to enabling Cert/CRL signing
+                        this.kuKeyCertSign = true;
+                        this.kuCrlSign = true;
+                    }
+                });
+            },
+
+            toDateInputValue(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            },
+
+            todayDate() {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                return this.toDateInputValue(now);
+            },
+
+            syncExpiryDateFromDays() {
+                const days = Math.max(1, Math.min(7300, Number(this.validityDays) || 1));
+                this.validityDays = days;
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                now.setDate(now.getDate() + days);
+                this.expiryDate = this.toDateInputValue(now);
+            },
+
+            syncValidityDaysFromExpiry() {
+                if (!this.expiryDate) {
+                    this.syncExpiryDateFromDays();
+                    return;
+                }
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const target = new Date(`${this.expiryDate}T00:00:00`);
+                const diffMs = target.getTime() - now.getTime();
+                const diffDays = Math.ceil(diffMs / 86400000);
+                this.validityDays = Math.max(1, Math.min(7300, diffDays));
+                this.syncExpiryDateFromDays();
+            },
+
+            buildSubjectDnString() {
+                const parts = [];
+                // Order matters for some parsers, but usually CN, O, OU, L, ST, C is standard enough
+                // We'll just append non-empty fields
+                if (this.subjectDn.CN) parts.push(`CN=${this.subjectDn.CN}`);
+                if (this.subjectDn.O) parts.push(`O=${this.subjectDn.O}`);
+                if (this.subjectDn.OU) parts.push(`OU=${this.subjectDn.OU}`);
+                if (this.subjectDn.L) parts.push(`L=${this.subjectDn.L}`);
+                if (this.subjectDn.ST) parts.push(`ST=${this.subjectDn.ST}`);
+                if (this.subjectDn.C) parts.push(`C=${this.subjectDn.C}`);
+                return parts.join(',');
+            },
+
+            async submit() {
+                this.loading = true;
+                this.successMsg = '';
+                this.errorMsg = '';
+
+                const dnString = this.buildSubjectDnString();
+
+                const body = {
+                    name: this.name,
+                    template_type: this.type,
+                    description: this.description,
+                    subject_dn: dnString || null,
+                    validity_days: this.validityDays,
+                    key_algorithm: this.algorithm,
+                    key_size: this.algorithm === 'RSA' ? this.keySize : null,
+                    key_curve: this.algorithm !== 'RSA' ? this.curve : null,
+                    key_usage: {
+                        digital_signature: this.kuDigitalSignature,
+                        key_encipherment: this.kuKeyEncipherment,
+                        key_cert_sign: this.kuKeyCertSign,
+                        crl_sign: this.kuCrlSign,
+                    },
+                    extended_key_usage: {
+                        server_auth: this.ekuServerAuth,
+                        client_auth: this.ekuClientAuth,
+                        code_signing: this.ekuCodeSigning,
+                        email_protection: this.ekuEmailProtection,
+                        time_stamping: this.ekuTimeStamping,
+                        ocsp_signing: this.ekuOcspSigning,
+                    },
+                    policy: {
+                        basic_constraints_ca: this.type !== 'leaf',
+                        basic_constraints_path_length: (this.type !== 'leaf' && Number.isInteger(this.pathLength)) ? this.pathLength : null
+                    }
+                };
+
+                try {
+                    const resp = await apiFetch('/api/templates/create', {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    const payload = await resp.json();
+                    if (payload.success) {
+                        this.successMsg = `模板 "${this.name}" 创建成功 (ID: ${payload.data.template_id})`;
+                        notifySuccess(this.successMsg);
+                        // Optional: Redirect to list or clear form
+                        setTimeout(() => {
+                            window.location.href = '/templates';
+                        }, 1500);
+                    } else {
+                        this.errorMsg = payload.message || payload.error?.detail || '创建失败';
+                        notifyError(this.errorMsg);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    this.errorMsg = "网络错误或服务器异常";
+                    notifyError(this.errorMsg);
+                }
+                this.loading = false;
+            }
+        }
+    }
+</script>
+{% endblock %}

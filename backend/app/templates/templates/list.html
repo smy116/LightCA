@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}模板列表 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="templatesPage()" x-init="load()" class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-3xl font-bold">模板列表</h1>
+        <a class="btn btn-primary" href="/templates/create">创建模板</a>
+    </div>
+
+    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <template x-for="tpl in templates" :key="tpl.id">
+            <article class="card bg-base-100 shadow-sm border border-base-300">
+                <div class="card-body">
+                    <div class="flex items-center justify-between">
+                        <h2 class="card-title" x-text="tpl.name"></h2>
+                        <span class="badge" :class="tpl.is_builtin ? 'badge-primary' : 'badge-outline'" x-text="tpl.is_builtin ? '预制' : '自定义'"></span>
+                    </div>
+                    <p class="text-sm opacity-70" x-text="certificateTypeLabel(tpl.template_type)"></p>
+                    <div class="card-actions justify-end">
+                        <a class="btn btn-sm" :href="`/templates/detail?template_id=${tpl.id}`">详情</a>
+                    </div>
+                </div>
+            </article>
+        </template>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function templatesPage() {
+    return {
+        templates: [],
+        async load() {
+            const resp = await apiFetch('/api/templates/list?per_page=100');
+            const payload = await resp.json();
+            if (payload.success) this.templates = payload.data.templates;
+        }
+    }
+}
+</script>
+{% endblock %}

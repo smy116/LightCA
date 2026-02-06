@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="winter">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}LightCA{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script defer src="/static/js/api.js"></script>
+    <script defer src="/static/js/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        :root {
+            --animation-btn: 0s;
+            --animation-input: 0s;
+            --btn-focus-scale: 1;
+        }
+
+        [x-cloak] { display: none !important; }
+
+        .btn,
+        .input,
+        .select,
+        .textarea,
+        .menu a {
+            animation: none;
+            transition-property: none;
+        }
+
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+            animation: none;
+        }
+
+        .badge {
+            min-width: 2.75rem;
+            white-space: nowrap;
+            word-break: keep-all;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-base-200">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 btn btn-sm btn-primary">跳转到内容</a>
+    {% set path = request.url.path %}
+    <div x-data="appShell()" x-cloak x-init="init(); if (localStorage.getItem('lightca.sidebar.open') !== null) sidebarOpen = localStorage.getItem('lightca.sidebar.open') === '1'" class="drawer" :class="sidebarOpen ? 'lg:drawer-open' : ''">
+        <input id="app-drawer" type="checkbox" class="drawer-toggle" x-model="sidebarOpen" @change="localStorage.setItem('lightca.sidebar.open', sidebarOpen ? '1' : '0')" />
+
+        <div class="drawer-content min-h-screen flex flex-col">
+            <header class="navbar bg-base-100 border-b border-base-300">
+                <div class="flex-none lg:hidden">
+                    <label for="app-drawer" class="btn btn-square btn-ghost" aria-label="打开导航">
+                        <i class="ph ph-list text-xl"></i>
+                    </label>
+                </div>
+                <div class="flex-1">
+                    <button class="btn btn-square btn-ghost hidden lg:inline-flex mr-1" type="button" @click="sidebarOpen = !sidebarOpen; localStorage.setItem('lightca.sidebar.open', sidebarOpen ? '1' : '0')" :aria-label="sidebarOpen ? '向左折叠导航' : '展开导航'" :title="sidebarOpen ? '向左折叠导航' : '展开导航'">
+                        <i class="ph text-xl" :class="sidebarOpen ? 'ph-caret-double-left' : 'ph-caret-double-right'"></i>
+                    </button>
+                    <a href="/" class="btn btn-ghost text-lg">LightCA</a>
+                </div>
+                <div class="flex-none gap-2">
+                    <button class="btn btn-ghost btn-circle" @click="switchTheme()" :title="theme === 'winter' ? '切换到暗色模式' : '切换到亮色模式'">
+                        <i class="ph text-lg" :class="theme === 'winter' ? 'ph-moon' : 'ph-sun'"></i>
+                    </button>
+                    <button class="btn btn-ghost" type="button" @click="logout()">
+                        <i class="ph ph-sign-out"></i>
+                        退出登录
+                    </button>
+                </div>
+            </header>
+
+            <main id="main-content" class="flex-1 p-4 lg:p-6" tabindex="-1">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+
+        <aside class="drawer-side min-h-screen">
+            <label for="app-drawer" class="drawer-overlay"></label>
+            <nav aria-label="Primary" class="h-full">
+            <ul class="menu p-4 w-72 h-full bg-base-100 border-r border-base-300 text-base-content">
+                <li class="menu-title">常规</li>
+                <li><a href="/" class="{% if path == '/' %}active{% endif %}" {% if path == '/' %}aria-current="page"{% endif %}><i class="ph ph-squares-four"></i>仪表盘</a></li>
+
+                <li class="menu-title mt-2">证书颁发机构 (CA)</li>
+                <li><a href="/ca" class="{% if path.startswith('/ca') and path != '/ca/tree' %}active{% endif %}" {% if path.startswith('/ca') and path != '/ca/tree' %}aria-current="page"{% endif %}><i class="ph ph-tree-structure"></i>CA 管理</a></li>
+                <li><a href="/ca/tree" class="{% if path == '/ca/tree' %}active{% endif %}" {% if path == '/ca/tree' %}aria-current="page"{% endif %}><i class="ph ph-git-branch"></i>CA 拓扑</a></li>
+
+                <li class="menu-title mt-2">证书</li>
+                <li><a href="/certificates" class="{% if path == '/certificates' or path == '/certificates/detail' %}active{% endif %}" {% if path == '/certificates' or path == '/certificates/detail' %}aria-current="page"{% endif %}><i class="ph ph-certificate"></i>证书列表</a></li>
+                <li><a href="/certificates/sign" class="{% if path == '/certificates/sign' %}active{% endif %}" {% if path == '/certificates/sign' %}aria-current="page"{% endif %}><i class="ph ph-pen-nib"></i>签署证书</a></li>
+                <li><a href="/certificates/import" class="{% if path == '/certificates/import' %}active{% endif %}" {% if path == '/certificates/import' %}aria-current="page"{% endif %}><i class="ph ph-download-simple"></i>导入证书</a></li>
+
+                <li class="menu-title mt-2">密钥</li>
+                <li><a href="/keys" class="{% if path == '/keys' %}active{% endif %}" {% if path == '/keys' %}aria-current="page"{% endif %}><i class="ph ph-key"></i>密钥管理</a></li>
+
+                <li class="menu-title mt-2">模板</li>
+                <li><a href="/templates" class="{% if path == '/templates' or path == '/templates/detail' %}active{% endif %}" {% if path == '/templates' or path == '/templates/detail' %}aria-current="page"{% endif %}><i class="ph ph-file-text"></i>模板列表</a></li>
+                <li><a href="/templates/create" class="{% if path == '/templates/create' %}active{% endif %}" {% if path == '/templates/create' %}aria-current="page"{% endif %}><i class="ph ph-plus"></i>创建模板</a></li>
+
+                <li class="menu-title mt-2">吊销</li>
+                <li><a href="/crl" class="{% if path == '/crl' %}active{% endif %}" {% if path == '/crl' %}aria-current="page"{% endif %}><i class="ph ph-list-dashes"></i>CRL 管理</a></li>
+                <li><a href="/crl/revocations" class="{% if path == '/crl/revocations' %}active{% endif %}" {% if path == '/crl/revocations' %}aria-current="page"{% endif %}><i class="ph ph-prohibit"></i>吊销列表</a></li>
+            </ul>
+            </nav>
+        </aside>
+    </div>
+
+    <div id="global-toast" class="toast toast-end hidden z-[2000]" aria-live="polite">
+        <div id="global-toast-box" class="alert alert-info">
+            <span id="global-toast-message"></span>
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

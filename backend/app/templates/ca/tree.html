@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}CA 拓扑 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="caTreePage()" x-init="init()" class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-3xl font-bold">CA 拓扑</h1>
+    </div>
+
+    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="stat rounded-xl border border-base-300 bg-base-100 p-4">
+            <div class="stat-title">根证书</div>
+            <div class="stat-value" x-text="summary.root"></div>
+        </div>
+        <div class="stat rounded-xl border border-base-300 bg-base-100 p-4">
+            <div class="stat-title">中间 CA</div>
+            <div class="stat-value" x-text="summary.intermediate"></div>
+        </div>
+        <div class="stat rounded-xl border border-base-300 bg-base-100 p-4">
+            <div class="stat-title">终端证书</div>
+            <div class="stat-value" x-text="summary.leaf"></div>
+        </div>
+        <div class="stat rounded-xl border border-base-300 bg-base-100 p-4">
+            <div class="stat-title">已吊销</div>
+            <div class="stat-value" x-text="summary.revoked"></div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-0">
+            <div class="overflow-x-auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>拓扑节点</th>
+                            <th>上级签发者</th>
+                            <th>类型</th>
+                            <th>状态</th>
+                            <th>子节点</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="row in rows" :key="row.id">
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-2" :style="`padding-left: ${row.level * 1.25}rem`">
+                                        <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-base-200 text-base-content/80">
+                                            <i class="ph" :class="iconByType(row.type)"></i>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <div class="truncate font-medium" x-text="row.subjectCn || '未命名证书'"></div>
+                                            <div class="text-xs text-base-content/60" x-text="`#${row.id}`"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="text-sm" x-text="row.parentCn ? `${row.parentCn} (#${row.parentId})` : '自签 / Root' "></span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-sm" :class="badgeByType(row.type)" x-text="labelByType(row.type)"></span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-sm" :class="statusBadgeClass(row.status)" x-text="certificateStatusLabel(row.status)"></span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-ghost badge-sm" x-text="row.childCount"></span>
+                                </td>
+                                <td>
+                                    <a class="btn btn-xs" :href="`/certificates/detail?certificate_id=${row.id}`">详情</a>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="!loading && rows.length === 0">
+                            <td colspan="6" class="text-center text-base-content/60">没有匹配的数据</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="p-4" x-show="loading">
+                <span class="loading loading-spinner"></span>
+                <span class="ml-2 text-sm text-base-content/70">加载拓扑中...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-error" x-show="error" x-text="error"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function caTreePage() {
+    return {
+        loading: false,
+        error: '',
+        rows: [],
+        summary: { root: 0, intermediate: 0, leaf: 0, revoked: 0 },
+        async init() {
+            await this.load();
+        },
+        async load() {
+            this.loading = true;
+            this.error = '';
+            try {
+                const response = await apiFetch('/api/certificates/tree');
+                const payload = await response.json();
+                if (!payload.success) {
+                    throw new Error(payload.message || '加载 CA 拓扑失败');
+                }
+                const tree = payload.data.tree || [];
+                this.rows = this.flattenTree(tree);
+                this.refreshSummary();
+            } catch (error) {
+                this.error = error.message || '加载 CA 拓扑失败';
+                notifyError(this.error);
+            } finally {
+                this.loading = false;
+            }
+        },
+        flattenTree(tree) {
+            const rows = [];
+            const walk = (nodes, level, parent = null) => {
+                (nodes || []).forEach((node, index) => {
+                    const children = node.children || [];
+
+                    rows.push({
+                        id: node.id,
+                        subjectCn: node.subject_cn || '',
+                        type: String(node.type || '').toLowerCase(),
+                        status: String(node.status || '').toLowerCase(),
+                        level,
+                        parentId: parent ? parent.id : null,
+                        parentCn: parent ? (parent.subject_cn || '') : '',
+                        childCount: children.length,
+                    });
+
+                    walk(children, level + 1, node);
+                });
+            };
+            walk(tree, 0, null, []);
+            return rows;
+        },
+        refreshSummary() {
+            const next = { root: 0, intermediate: 0, leaf: 0, revoked: 0 };
+            this.rows.forEach((row) => {
+                if (row.type === 'root') next.root += 1;
+                else if (row.type === 'intermediate') next.intermediate += 1;
+                else next.leaf += 1;
+                if (row.status === 'revoked') next.revoked += 1;
+            });
+            this.summary = next;
+        },
+        labelByType(type) {
+            if (type === 'root') return '根证书';
+            if (type === 'intermediate') return '中间证书';
+            return '终端证书';
+        },
+        badgeByType(type) {
+            if (type === 'root') return 'badge-primary';
+            if (type === 'intermediate') return 'badge-secondary';
+            return 'badge-ghost';
+        },
+        iconByType(type) {
+            if (type === 'root') return 'ph-seal-check';
+            if (type === 'intermediate') return 'ph-shield-chevron';
+            return 'ph-certificate';
+        },
+    }
+}
+</script>
+{% endblock %}

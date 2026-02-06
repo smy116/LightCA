@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}证书列表 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="certificatesPage()" x-init="load()" class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-3xl font-bold">证书列表</h1>
+        <div class="flex gap-2">
+            <a href="/certificates/import" class="btn btn-outline"><i class="ph ph-upload"></i>导入</a>
+            <a href="/certificates/sign" class="btn btn-primary"><i class="ph ph-pen-nib"></i>签署</a>
+        </div>
+    </div>
+
+        <div class="card bg-base-100 shadow-sm">
+        <div class="card-body grid gap-3 md:grid-cols-4">
+            <input class="input input-bordered" placeholder="搜索 CN/IP" x-model="search" @input.debounce.400ms="load()" />
+            <select class="select select-bordered" x-model="certType" @change="load()">
+                <option value="">所有类型</option>
+                <option value="leaf">终端证书</option>
+                <option value="root">根证书</option>
+                <option value="intermediate">中间证书</option>
+            </select>
+            <select class="select select-bordered" x-model="status" @change="load()">
+                <option value="">所有状态</option>
+                <option value="valid">有效</option>
+                <option value="revoked">已吊销</option>
+                <option value="expired">已过期</option>
+            </select>
+            <select class="select select-bordered" x-model="sortOrder" @change="load()">
+                <option value="asc">有效期：最近过期</option>
+                <option value="desc">有效期：最远过期</option>
+            </select>
+        </div>
+        <div class="px-6 pb-5 text-sm opacity-70" x-text="`总数: ${total}`"></div>
+    </div>
+
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>CN</th>
+                    <th>类型</th>
+                    <th>状态</th>
+                    <th>有效期至</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="cert in certificates" :key="cert.id">
+                    <tr>
+                        <td x-text="cert.id"></td>
+                        <td x-text="cert.subject_cn"></td>
+                        <td class="text-xs" x-text="certificateTypeLabel(cert.type)"></td>
+                        <td>
+                            <span class="badge" :class="statusBadgeClass(cert.status)" x-text="certificateStatusLabel(cert.status)"></span>
+                        </td>
+                        <td x-text="(cert.not_after || '').slice(0, 10)"></td>
+                        <td class="space-x-1">
+                            <a class="btn btn-xs" :href="`/certificates/detail?certificate_id=${cert.id}`">详情</a>
+                            <button class="btn btn-xs btn-error" x-show="cert.status === 'valid'" @click="revoke(cert.id)">吊销</button>
+                            <button class="btn btn-xs btn-outline btn-error" :disabled="deletingId === cert.id" @click="remove(cert.id)">
+                                <span class="loading loading-spinner loading-xs" x-show="deletingId === cert.id"></span>
+                                删除
+                            </button>
+                        </td>
+                    </tr>
+                </template>
+                <tr x-show="certificates.length === 0">
+                    <td colspan="6" class="text-center text-base-content/60">暂无证书</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="join">
+        <button class="btn join-item" :disabled="page <= 1" @click="page -= 1; load()">上一页</button>
+        <button class="btn join-item btn-disabled" x-text="`第 ${page} 页`"></button>
+        <button class="btn join-item" :disabled="page * perPage >= total" @click="page += 1; load()">下一页</button>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function certificatesPage() {
+    return {
+        certificates: [],
+        deletingId: null,
+        total: 0,
+        page: 1,
+        perPage: 10,
+        search: '',
+        certType: '',
+        status: '',
+        sortBy: 'not_after',
+        sortOrder: 'asc',
+        async load() {
+            const p = new URLSearchParams({ page: this.page, per_page: this.perPage });
+            if (this.search) p.set('search', this.search);
+            if (this.certType) p.set('cert_type', this.certType);
+            if (this.status) p.set('status', this.status);
+            p.set('sort_by', this.sortBy);
+            p.set('sort_order', this.sortOrder);
+            const resp = await apiFetch(`/api/certificates/list?${p.toString()}`);
+            const payload = await resp.json();
+            if (payload.success) {
+                this.certificates = payload.data.certificates;
+                this.total = payload.data.total;
+            }
+        },
+        async revoke(id) {
+            if (!confirmAction('确定要吊销此证书吗？')) return;
+            const resp = await apiFetch('/api/certificates/revoke', {
+                method: 'POST',
+                body: JSON.stringify({ certificate_id: id, reason: 'manual' })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('证书已吊销');
+                await this.load();
+            } else {
+                notifyError(payload.message || payload.error?.detail || '吊销失败');
+            }
+        },
+        async remove(id) {
+            if (!confirmAction('确定要删除此证书吗？')) return;
+            const deleteKey = confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书');
+            this.deletingId = id;
+            const resp = await apiFetch('/api/certificates/delete', {
+                method: 'POST',
+                body: JSON.stringify({ certificate_id: id, delete_key: deleteKey })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('证书已删除');
+                await this.load();
+            } else {
+                notifyError(payload.message || payload.error?.detail || '删除失败');
+            }
+            this.deletingId = null;
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+.env
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Tooling state
+.sisyphus/
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

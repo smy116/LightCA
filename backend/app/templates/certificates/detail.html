@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% from "components/copy_field.html" import row as copy_row %}
+
+{% block title %}证书详情 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="certDetailPage()" x-init="load()" class="space-y-4">
+    <h1 class="text-3xl font-bold">证书详情</h1>
+    <div class="card bg-base-100 shadow-sm" x-show="cert">
+        <div class="card-body">
+            <p><span class="font-semibold">ID:</span> <span x-text="cert?.id"></span></p>
+            <p><span class="font-semibold">类型:</span> <span x-text="certificateTypeLabel(cert?.type)"></span></p>
+            <p><span class="font-semibold">CN:</span> <span x-text="cert?.subject_cn"></span></p>
+            <p><span class="font-semibold">序列号:</span></p>
+            {{ copy_row('serial-display', '') }}
+            <p><span class="font-semibold">状态:</span> <span class="badge" :class="statusBadgeClass(cert?.status)" x-text="certificateStatusLabel(cert?.status)"></span></p>
+            <p><span class="font-semibold">父 ID:</span> <span x-text="cert?.parent_id || '-' "></span></p>
+            <p><span class="font-semibold">密钥 ID:</span> <span x-text="cert?.key_id || '-' "></span></p>
+            <p><span class="font-semibold">生效时间:</span> <span x-text="cert?.not_before"></span></p>
+            <p><span class="font-semibold">过期时间:</span> <span x-text="cert?.not_after"></span></p>
+            <p><span class="font-semibold">吊销时间:</span> <span x-text="cert?.revoked_at || '-' "></span></p>
+
+            <details class="collapse collapse-arrow border border-base-300 bg-base-50 mt-2">
+                <summary class="collapse-title font-semibold">元数据</summary>
+                <div class="collapse-content">
+                    <pre class="bg-base-200 p-3 rounded-lg text-xs overflow-auto" x-text="JSON.stringify(cert?.meta_data || {}, null, 2)"></pre>
+                </div>
+            </details>
+
+            <div class="join">
+                <a class="btn join-item" href="/certificates">返回</a>
+                <div class="dropdown dropdown-end join-item">
+                    <label tabindex="0" class="btn btn-primary">导出证书</label>
+                    <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-100 rounded-box w-64 border border-base-300">
+                        <li><button @click="exportCertificate('pem')">PEM - 标准 PEM 格式证书</button></li>
+                        <li><button @click="exportCertificate('pem-chain')">PEM Chain - 完整证书链</button></li>
+                        <li><button @click="exportCertificate('pem-bundle')">PEM Bundle - 链 + 证书 + 私钥</button></li>
+                        <li><button @click="exportCertificate('der')">DER - 二进制格式</button></li>
+                        <li><button @click="exportCertificate('p12')">PKCS#12 - .p12 (证书 + 私钥)</button></li>
+                    </ul>
+                </div>
+                <button class="btn join-item" @click="loadChain()">加载证书链</button>
+                <button class="btn join-item btn-error" x-show="cert?.status === 'valid'" @click="revoke()">吊销</button>
+                <button class="btn join-item btn-outline btn-error" :disabled="deleting" x-show="cert" @click="remove()">
+                    <span class="loading loading-spinner loading-xs" x-show="deleting"></span>
+                    删除
+                </button>
+            </div>
+
+            <div x-show="chain.length > 0" class="mt-3">
+                <p class="font-semibold mb-2">证书链</p>
+                <ul class="menu bg-base-200 rounded-box">
+                    <template x-for="node in chain" :key="node.id">
+                        <li><a :href="`/certificates/detail?certificate_id=${node.id}`" x-text="`${node.id} - ${node.subject_cn}`"></a></li>
+                    </template>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="alert alert-error" x-show="error" x-text="error"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function certDetailPage() {
+    return {
+        cert: null,
+        chain: [],
+        error: '',
+        deleting: false,
+        certificateId: null,
+        async load() {
+            this.certificateId = new URLSearchParams(window.location.search).get('certificate_id') || new URLSearchParams(window.location.search).get('id');
+            if (!this.certificateId) { this.error = '缺少 certificate_id'; return; }
+            const resp = await apiFetch(`/api/certificates/detail?certificate_id=${this.certificateId}`);
+            const payload = await resp.json();
+            if (payload.success) {
+                this.cert = payload.data;
+                const serialInput = document.getElementById('serial-display');
+                if (serialInput) serialInput.value = payload.data.serial_number || '';
+            }
+            else this.error = payload.message || payload.error?.detail || '加载失败';
+        },
+        async loadChain() {
+            if (!this.certificateId) return;
+            const resp = await apiFetch(`/api/certificates/chain?certificate_id=${this.certificateId}`);
+            const payload = await resp.json();
+            if (payload.success) {
+                this.chain = payload.data.chain || [];
+            } else {
+                this.error = payload.message || payload.error?.detail || '加载证书链失败';
+                notifyError(this.error);
+            }
+        },
+        async exportCertificate(format) {
+            if (!this.certificateId) return;
+            try {
+                if (format === 'pem-bundle') {
+                    const confirmed = confirmAction('PEM Bundle 将包含私钥，是否继续导出？');
+                    if (!confirmed) return;
+                }
+                const params = new URLSearchParams({
+                    certificate_id: String(this.certificateId),
+                    format,
+                });
+                if (format === 'p12') {
+                    const password = window.prompt('请输入 PKCS#12 文件密码（可选）', '');
+                    if (password === null) return;
+                    if (password) params.set('password', password);
+                }
+                await downloadWithAuth(`/api/certificates/export?${params.toString()}`);
+                const formatName = {
+                    pem: 'PEM',
+                    'pem-chain': 'PEM Chain',
+                    'pem-bundle': 'PEM Bundle',
+                    der: 'DER',
+                    p12: 'PKCS#12',
+                }[format] || format;
+                notifySuccess(`${formatName} 导出成功`);
+            } catch (error) {
+                notifyError(error.message || '导出失败');
+            }
+        },
+        async revoke() {
+            if (!confirmAction('确定要吊销此证书吗？')) return;
+            const resp = await apiFetch('/api/certificates/revoke', {
+                method: 'POST',
+                body: JSON.stringify({ certificate_id: Number(this.certificateId), reason: 'manual' })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('证书已吊销');
+                await this.load();
+            } else {
+                this.error = payload.message || payload.error?.detail || '吊销失败';
+                notifyError(this.error);
+            }
+        },
+        async remove() {
+            if (!confirmAction('确定要删除此证书吗？')) return;
+            const deleteKey = confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书');
+            this.deleting = true;
+            const resp = await apiFetch('/api/certificates/delete', {
+                method: 'POST',
+                body: JSON.stringify({ certificate_id: Number(this.certificateId), delete_key: deleteKey })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('证书已删除');
+                window.location.href = '/certificates';
+            } else {
+                this.error = payload.message || payload.error?.detail || '删除失败';
+                notifyError(this.error);
+            }
+            this.deleting = false;
+        }
+    }
+}
+</script>
+{% endblock %}

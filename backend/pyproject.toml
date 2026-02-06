@@ -1,0 +1,83 @@
+[tool.po]
+name = "LightCA"
+version = "0.1.0"
+description = "Docker + Python Web CA certificate, key management and issuance platform"
+authors = ["LightCA Contributors"]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+python-multipart = "^0.0.6"
+sqlalchemy = "^2.0.25"
+alembic = "^1.13.1"
+pyjwt = "^2.8.0"
+bcrypt = "^4.1.2"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+cryptography = "^42.0.0"
+pydantic = "^2.5.3"
+pydantic-settings = "^2.1.0"
+jinja2 = "^3.1.3"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.4"
+pytest-cov = "^4.1.0"
+httpx = "^0.26.0"
+black = "^23.12.1"
+isort = "^5.13.2"
+mypy = "^1.88.0"
+ruff = "^0.1.9"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+addopts = "--cov=app --cov-report=html --cov-report=term-missing"
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

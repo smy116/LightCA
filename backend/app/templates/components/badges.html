@@ -1,0 +1,18 @@
+{% macro cert_status(status) -%}
+  {% set normalized = (status or '')|lower %}
+  {% if normalized == 'valid' %}
+    <span class="badge badge-success badge-outline">有效</span>
+  {% elif normalized == 'revoked' %}
+    <span class="badge badge-error gap-2"><i class="ph ph-prohibit"></i>已吊销</span>
+  {% elif normalized == 'expired' %}
+    <span class="badge badge-warning">已过期</span>
+  {% else %}
+    <span class="badge badge-ghost">{{ status or '未知' }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro root_ca(type_value) -%}
+  {% if (type_value or '')|lower == 'root' %}
+    <span class="badge badge-primary">根 CA</span>
+  {% endif %}
+{%- endmacro %}

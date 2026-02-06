@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}CRL 吊销列表 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="revocationsPage()" x-init="init()" class="space-y-4">
+    <h1 class="text-3xl font-bold">吊销记录</h1>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body md:grid md:grid-cols-4 md:gap-3">
+            <select class="select select-bordered" x-model.number="crlId" @change="load()">
+                <option value="">选择 CRL</option>
+                <template x-for="crl in crls" :key="crl.id">
+                    <option :value="crl.id" x-text="`CRL #${crl.crl_number} (ID ${crl.id})`"></option>
+                </template>
+            </select>
+            <div class="text-sm opacity-70 self-center" x-text="`吊销总数: ${total}`"></div>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table">
+            <thead>
+                <tr><th>证书 ID</th><th>序列号</th><th>CN</th><th>原因</th><th>吊销时间</th></tr>
+            </thead>
+            <tbody>
+                <template x-for="item in revocations" :key="item.certificate_id">
+                    <tr>
+                        <td x-text="item.certificate_id"></td>
+                        <td class="font-mono text-xs" x-text="item.serial_number"></td>
+                        <td x-text="item.subject_cn"></td>
+                        <td x-text="item.reason"></td>
+                        <td x-text="(item.revoked_at || '').replace('T', ' ').slice(0, 19)"></td>
+                    </tr>
+                </template>
+                <tr x-show="revocations.length === 0"><td colspan="5" class="text-center text-base-content/60">暂无吊销记录</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function revocationsPage() {
+    return {
+        crls: [],
+        crlId: '',
+        revocations: [],
+        total: 0,
+        async init() {
+            const listResp = await apiFetch('/api/crl/list?per_page=300');
+            const listPayload = await listResp.json();
+            if (listPayload.success) this.crls = listPayload.data.crls;
+
+            const qId = new URLSearchParams(window.location.search).get('crl_id');
+            if (qId) {
+                this.crlId = Number(qId);
+                await this.load();
+            }
+        },
+        async load() {
+            if (!this.crlId) {
+                this.revocations = [];
+                this.total = 0;
+                return;
+            }
+            const resp = await apiFetch(`/api/crl/revocations?crl_id=${this.crlId}&per_page=200`);
+            const payload = await resp.json();
+            if (payload.success) {
+                this.revocations = payload.data.revocations;
+                this.total = payload.data.total;
+            } else {
+                notifyError(payload.message || payload.error?.detail || '加载吊销记录失败');
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

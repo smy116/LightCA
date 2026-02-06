@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}CA 详情 - LightCA{% endblock %}
+
+{% block content %}
+<section x-data="caDetailPage()" x-init="load()" class="space-y-4">
+    <h1 class="text-3xl font-bold">CA 详情</h1>
+
+    <div class="card bg-base-100 shadow-sm" x-show="ca">
+        <div class="card-body">
+            <p><span class="font-semibold">ID:</span> <span x-text="ca?.id"></span></p>
+            <p><span class="font-semibold">CN:</span> <span x-text="ca?.subject_cn"></span></p>
+            <p><span class="font-semibold">类型:</span> <span x-text="certificateTypeLabel(ca?.type)"></span></p>
+            <p><span class="font-semibold">序列号:</span> <span class="font-mono" x-text="ca?.serial_number"></span></p>
+            <p><span class="font-semibold">状态:</span> <span x-text="certificateStatusLabel(ca?.status)"></span></p>
+            <p><span class="font-semibold">过期时间:</span> <span x-text="ca?.not_after"></span></p>
+            <p><span class="font-semibold">最新 CRL:</span> <span x-text="latestCrlText"></span></p>
+
+            <div class="card-actions justify-start gap-2">
+                <a class="btn btn-primary" :href="`/certificates/sign?issuer_id=${ca?.id}`">签署中间 CA</a>
+                <button class="btn btn-secondary" @click="generateCrl()">生成 CRL</button>
+                <button class="btn" @click="exportCertificate()">导出证书</button>
+                <button class="btn btn-error" @click="revoke()" x-show="ca?.status === 'valid'">吊销</button>
+                <button class="btn btn-outline btn-error" :disabled="deleting" x-show="ca" @click="remove()">
+                    <span class="loading loading-spinner loading-xs" x-show="deleting"></span>
+                    删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-success" x-show="msg" x-text="msg"></div>
+    <div class="alert alert-error" x-show="error" x-text="error"></div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function caDetailPage() {
+    return {
+        caId: null,
+        ca: null,
+        latestCrlText: '-',
+        msg: '',
+        error: '',
+        deleting: false,
+        async load() {
+            this.caId = new URLSearchParams(window.location.search).get('certificate_id') || new URLSearchParams(window.location.search).get('id');
+            if (!this.caId) {
+                this.error = '缺少 certificate_id';
+                return;
+            }
+            const resp = await apiFetch(`/api/certificates/detail?certificate_id=${this.caId}`);
+            const payload = await resp.json();
+            if (payload.success) this.ca = payload.data;
+            else this.error = payload.message || payload.error?.detail || '加载失败';
+
+            const crlResp = await apiFetch(`/api/crl/list?ca_id=${this.caId}&per_page=1`);
+            const crlPayload = await crlResp.json();
+            if (crlPayload.success && crlPayload.data.crls.length > 0) {
+                const latest = crlPayload.data.crls[0];
+                this.latestCrlText = `#${latest.crl_number} (${(latest.generated_at || '').replace('T', ' ').slice(0, 19)})`;
+            } else {
+                this.latestCrlText = '未生成 CRL';
+            }
+        },
+        async generateCrl() {
+            const resp = await apiFetch('/api/crl/generate', {
+                method: 'POST',
+                body: JSON.stringify({ ca_id: Number(this.caId) })
+            });
+            const payload = await resp.json();
+            if (payload.success) this.msg = `CRL 已生成: ${payload.data.crl_id}`;
+            else this.error = payload.message || payload.error?.detail || '生成 CRL 失败';
+        },
+        async exportCertificate() {
+            if (!this.caId) return;
+            try {
+                await downloadWithAuth(`/api/certificates/export?certificate_id=${this.caId}&format=pem`);
+                notifySuccess('证书已导出');
+            } catch (error) {
+                notifyError(error.message || '导出失败');
+            }
+        },
+        async revoke() {
+            if (!confirmAction('确定要吊销此 CA 证书吗？')) return;
+            const resp = await apiFetch('/api/certificates/revoke', {
+                method: 'POST',
+                body: JSON.stringify({ certificate_id: Number(this.caId), reason: 'caCompromise' })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                this.msg = 'CA 已吊销';
+                await this.load();
+            } else {
+                this.error = payload.message || payload.error?.detail || '吊销失败';
+            }
+        },
+        async remove() {
+            if (!confirmAction('确定要删除此 CA 证书吗？')) return;
+            const deleteKey = confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书');
+            this.deleting = true;
+            const resp = await apiFetch('/api/certificates/delete', {
+                method: 'POST',
+                body: JSON.stringify({ certificate_id: Number(this.caId), delete_key: deleteKey })
+            });
+            const payload = await resp.json();
+            if (payload.success) {
+                notifySuccess('CA 证书已删除');
+                window.location.href = '/ca';
+            } else {
+                this.error = payload.message || payload.error?.detail || '删除失败';
+                notifyError(this.error);
+            }
+            this.deleting = false;
+        }
+    }
+}
+</script>
+{% endblock %}
