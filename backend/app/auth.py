@@ -1,30 +1,37 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.security import decode_access_token, verify_password, is_bcrypt_hash
 from app.config import settings
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
     """Get current user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
+    if credentials is None:
+        raise credentials_exception
+
     token = credentials.credentials
     payload = decode_access_token(token)
-    
+
     if payload is None:
         raise credentials_exception
-    
-    username: str = payload.get("sub")
+
+    username = payload.get("sub")
     if username is None:
         raise credentials_exception
-    
+
     return {"username": username}
 
 
@@ -37,7 +44,7 @@ def verify_admin_password(username: str, password: str) -> bool:
     """Verify admin password"""
     if username != settings.ADMIN:
         return False
-    
+
     if is_bcrypt_hash(settings.ADMIN_PASSWORD):
         return verify_password(password, settings.ADMIN_PASSWORD)
     else:
