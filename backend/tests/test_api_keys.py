@@ -210,6 +210,43 @@ class TestKeysAPI:
 
         assert response.status_code == 200
 
+    def test_delete_key_blocked_when_linked_certificate_exists(
+        self, client: TestClient, auth_headers: dict
+    ):
+        key_response = client.post(
+            "/api/keys/create",
+            json={"algorithm": "RSA", "key_size": 2048},
+            headers=auth_headers,
+        )
+        key_id = key_response.json()["data"]["key_id"]
+
+        cert_response = client.post(
+            "/api/certificates/sign",
+            json={
+                "key_id": key_id,
+                "type": "leaf",
+                "subject_dn": "CN=Linked Cert,O=Test Org,C=US",
+                "validity_days": 90,
+                "is_ca": False,
+            },
+            headers=auth_headers,
+        )
+        cert_id = cert_response.json()["data"]["certificate_id"]
+
+        delete_response = client.post(
+            "/api/keys/delete", json={"key_id": key_id}, headers=auth_headers
+        )
+
+        assert delete_response.status_code == 409
+        payload = delete_response.json()
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "KEY_IN_USE"
+        assert payload["data"]["certificate_id"] == cert_id
+        assert (
+            payload["data"]["certificate_detail_url"]
+            == f"/certificates/detail?certificate_id={cert_id}"
+        )
+
     def test_export_key_pem(self, client: TestClient, auth_headers: dict):
         create_response = client.post(
             "/api/keys/create",

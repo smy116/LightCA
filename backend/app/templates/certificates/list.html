@@ -84,7 +84,7 @@
 
 {% block scripts %}
 <script>
-function certificatesPage() {
+window.certificatesPage = () => {
     return {
         certificates: [],
         deletingId: null,
@@ -111,7 +111,7 @@ function certificatesPage() {
             }
         },
         async revoke(id) {
-            if (!confirmAction('确定要吊销此证书吗？')) return;
+            if (!await confirmAction('确定要吊销此证书吗？', { confirmClass: 'btn-warning' })) return;
             const resp = await apiFetch('/api/certificates/revoke', {
                 method: 'POST',
                 body: JSON.stringify({ certificate_id: id, reason: 'manual' })
@@ -125,8 +125,13 @@ function certificatesPage() {
             }
         },
         async remove(id) {
-            if (!confirmAction('确定要删除此证书吗？')) return;
-            const deleteKey = confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书');
+            if (!await confirmAction('确定要删除此证书吗？', { confirmClass: 'btn-error' })) return;
+            const deleteKey = await confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书', {
+                title: '关联私钥处理',
+                confirmText: '同时删除私钥',
+                cancelText: '仅删除证书',
+                confirmClass: 'btn-error',
+            });
             this.deletingId = id;
             const resp = await apiFetch('/api/certificates/delete', {
                 method: 'POST',

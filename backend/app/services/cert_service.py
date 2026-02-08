@@ -1,4 +1,6 @@
 import json
+import zipfile
+from io import BytesIO
 from datetime import datetime, timezone
 
 from typing import Optional, Dict, Any, cast
@@ -365,7 +367,17 @@ def export_certificate(
             )
             for item in chain
         )
-        return chain_pem, f"cert_{cert.id}-chain.pem", "application/x-pem-file"
+        key = db.query(Key).filter(Key.id == cert.key_id, Key.is_deleted == False).first()
+        if not key:
+            raise ValueError("Certificate has no available private key for PEM chain export")
+
+        key_pem = decrypt_private_key(key.encrypted_pem).encode()
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr(f"cert_{cert.id}-chain.pem", chain_pem)
+            zip_file.writestr(f"cert_{cert.id}.key.pem", key_pem)
+
+        return zip_buffer.getvalue(), f"cert_{cert.id}-chain.zip", "application/zip"
     elif format == "pem-bundle":
         chain = get_certificate_chain(db, certificate_id)
         chain_pem = b"".join(

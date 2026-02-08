@@ -1,7 +1,7 @@
 import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -126,7 +126,32 @@ async def get_key(
     description="Soft-delete a key by ID.",
 )
 async def delete_key_endpoint(request: KeyDeleteRequest, db: Session = Depends(get_db)):
-    delete_key(db, request.key_id)
+    try:
+        delete_key(db, request.key_id)
+    except ValueError as exc:
+        cert_id = getattr(exc, "certificate_id", None)
+        cert_subject_cn = getattr(exc, "subject_cn", None)
+        if cert_id is None:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        detail = f"该密钥已关联证书 #{cert_id}，请先删除证书后再删除密钥" + (
+            f"（CN: {cert_subject_cn}）" if cert_subject_cn else ""
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "success": False,
+                "message": detail,
+                "data": {
+                    "certificate_id": cert_id,
+                    "certificate_subject_cn": cert_subject_cn,
+                    "certificate_detail_url": f"/certificates/detail?certificate_id={cert_id}",
+                },
+                "error": {
+                    "code": "KEY_IN_USE",
+                    "detail": detail,
+                },
+            },
+        )
     return success_response("Key deleted", {"key_id": request.key_id}).model_dump()
 
 

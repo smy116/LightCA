@@ -48,7 +48,7 @@
 
 {% block scripts %}
 <script>
-function keysPage() {
+window.keysPage = () => {
     return {
         keys: [],
         deletingId: null,
@@ -75,7 +75,7 @@ function keysPage() {
             }
         },
         async remove(id) {
-            if (!confirmAction('确定要删除此密钥吗？')) return;
+            if (!await confirmAction('确定要删除此密钥吗？')) return;
             this.deletingId = id;
             const resp = await apiFetch('/api/keys/delete', {
                 method: 'POST',
@@ -86,7 +86,17 @@ function keysPage() {
                 notifySuccess('密钥已删除');
                 this.load();
             } else {
-                notifyError(payload.message || payload.error?.detail || '删除失败');
+                const message = payload.message || payload.error?.detail || '删除失败';
+                if (payload.error?.code === 'KEY_IN_USE' && payload.data?.certificate_detail_url) {
+                    const certLabel = payload.data?.certificate_subject_cn
+                        ? `${payload.data.certificate_subject_cn} (#${payload.data.certificate_id})`
+                        : `#${payload.data.certificate_id}`;
+                    const shouldJump = await confirmAction(`${message}\n\n是否立即跳转到关联证书详情页？\n${certLabel}`);
+                    if (shouldJump) {
+                        window.location.href = payload.data.certificate_detail_url;
+                    }
+                }
+                notifyError(message);
             }
             this.deletingId = null;
         }

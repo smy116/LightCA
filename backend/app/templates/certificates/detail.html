@@ -1,75 +1,302 @@
 {% extends "base.html" %}
-{% from "components/copy_field.html" import row as copy_row %}
-
 {% block title %}证书详情 - LightCA{% endblock %}
 
 {% block content %}
-<section x-data="certDetailPage()" x-init="load()" class="space-y-4">
-    <h1 class="text-3xl font-bold">证书详情</h1>
-    <div class="card bg-base-100 shadow-sm" x-show="cert">
-        <div class="card-body">
-            <p><span class="font-semibold">ID:</span> <span x-text="cert?.id"></span></p>
-            <p><span class="font-semibold">类型:</span> <span x-text="certificateTypeLabel(cert?.type)"></span></p>
-            <p><span class="font-semibold">CN:</span> <span x-text="cert?.subject_cn"></span></p>
-            <p><span class="font-semibold">序列号:</span></p>
-            {{ copy_row('serial-display', '') }}
-            <p><span class="font-semibold">状态:</span> <span class="badge" :class="statusBadgeClass(cert?.status)" x-text="certificateStatusLabel(cert?.status)"></span></p>
-            <p><span class="font-semibold">父 ID:</span> <span x-text="cert?.parent_id || '-' "></span></p>
-            <p><span class="font-semibold">密钥 ID:</span> <span x-text="cert?.key_id || '-' "></span></p>
-            <p><span class="font-semibold">生效时间:</span> <span x-text="cert?.not_before"></span></p>
-            <p><span class="font-semibold">过期时间:</span> <span x-text="cert?.not_after"></span></p>
-            <p><span class="font-semibold">吊销时间:</span> <span x-text="cert?.revoked_at || '-' "></span></p>
+<section x-data="certDetailPage()" x-init="load()" class="max-w-7xl mx-auto space-y-6">
+    <div x-show="!cert && !error" class="flex flex-col items-center justify-center py-20 opacity-50">
+        <span class="loading loading-spinner loading-lg text-primary"></span>
+        <p class="mt-4 text-sm text-base-content/70">正在加载证书详情...</p>
+    </div>
 
-            <details class="collapse collapse-arrow border border-base-300 bg-base-50 mt-2">
-                <summary class="collapse-title font-semibold">元数据</summary>
-                <div class="collapse-content">
-                    <pre class="bg-base-200 p-3 rounded-lg text-xs overflow-auto" x-text="JSON.stringify(cert?.meta_data || {}, null, 2)"></pre>
-                </div>
-            </details>
+    <div x-show="error" class="alert alert-error shadow-lg" x-cloak>
+        <i class="ph ph-warning-circle text-2xl"></i>
+        <div>
+            <h3 class="font-bold">加载失败</h3>
+            <div class="text-xs" x-text="error"></div>
+        </div>
+        <a href="/certificates" class="btn btn-sm btn-ghost">返回列表</a>
+    </div>
 
-            <div class="join">
-                <a class="btn join-item" href="/certificates">返回</a>
-                <div class="dropdown dropdown-end join-item">
-                    <label tabindex="0" class="btn btn-primary">导出证书</label>
-                    <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-100 rounded-box w-64 border border-base-300">
-                        <li><button @click="exportCertificate('pem')">PEM - 标准 PEM 格式证书</button></li>
-                        <li><button @click="exportCertificate('pem-chain')">PEM Chain - 完整证书链</button></li>
-                        <li><button @click="exportCertificate('pem-bundle')">PEM Bundle - 链 + 证书 + 私钥</button></li>
-                        <li><button @click="exportCertificate('der')">DER - 二进制格式</button></li>
-                        <li><button @click="exportCertificate('p12')">PKCS#12 - .p12 (证书 + 私钥)</button></li>
+    <div x-show="cert" x-transition.opacity class="space-y-6" x-cloak>
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div class="flex flex-col gap-1">
+                <div class="text-sm breadcrumbs text-base-content/60">
+                    <ul>
+                        <li><a href="/certificates">证书列表</a></li>
+                        <li>详情</li>
                     </ul>
                 </div>
-                <button class="btn join-item" @click="loadChain()">加载证书链</button>
-                <button class="btn join-item btn-error" x-show="cert?.status === 'valid'" @click="revoke()">吊销</button>
-                <button class="btn join-item btn-outline btn-error" :disabled="deleting" x-show="cert" @click="remove()">
-                    <span class="loading loading-spinner loading-xs" x-show="deleting"></span>
-                    删除
-                </button>
+                <div class="flex items-center gap-3">
+                    <h1 class="text-3xl font-bold text-base-content break-all" x-text="cert?.subject_cn || 'Unknown Subject'"></h1>
+                    <div class="badge badge-lg font-semibold" :class="statusBadgeClass(cert?.status)" x-text="certificateStatusLabel(cert?.status)"></div>
+                </div>
+                <div class="flex items-center gap-2 text-sm text-base-content/70 mt-1">
+                    <span class="badge badge-ghost gap-1">
+                        <i class="ph ph-tag"></i>
+                        <span x-text="certificateTypeLabel(cert?.type)"></span>
+                    </span>
+                    <span class="font-mono opacity-50" x-text="'ID: ' + cert?.id"></span>
+                </div>
             </div>
 
-            <div x-show="chain.length > 0" class="mt-3">
-                <p class="font-semibold mb-2">证书链</p>
-                <ul class="menu bg-base-200 rounded-box">
-                    <template x-for="node in chain" :key="node.id">
-                        <li><a :href="`/certificates/detail?certificate_id=${node.id}`" x-text="`${node.id} - ${node.subject_cn}`"></a></li>
-                    </template>
-                </ul>
+            <div class="flex flex-wrap gap-2 w-full lg:w-auto">
+                <div class="dropdown dropdown-end">
+                    <label tabindex="0" class="btn btn-primary">
+                        <i class="ph ph-export text-lg"></i> 导出证书
+                    </label>
+                    <ul tabindex="0" class="dropdown-content z-[100] menu p-2 shadow-xl bg-base-100 rounded-box w-64 border border-base-200">
+                        <li class="menu-title px-2 py-1 text-xs opacity-50">文本格式</li>
+                        <li><button @click="exportCertificate('pem')"><i class="ph ph-file-text"></i> PEM (标准证书)</button></li>
+                        <li><button @click="exportCertificate('pem-chain')"><i class="ph ph-files"></i> PEM Chain (证书链 + 私钥 ZIP)</button></li>
+                        <li><button @click="exportCertificate('pem-bundle')"><i class="ph ph-package"></i> PEM Bundle (含私钥)</button></li>
+                        <div class="divider my-1"></div>
+                        <li class="menu-title px-2 py-1 text-xs opacity-50">二进制/归档</li>
+                        <li><button @click="exportCertificate('der')"><i class="ph ph-file-code"></i> DER (二进制)</button></li>
+                        <li><button @click="exportCertificate('p12')"><i class="ph ph-lock-key"></i> PKCS#12 (含私钥)</button></li>
+                    </ul>
+                </div>
+
+                <button class="btn btn-warning" x-show="cert?.status === 'valid'" @click="revoke()">
+                    <i class="ph ph-prohibit text-lg"></i> 吊销
+                </button>
+
+                <button class="btn btn-outline btn-error" :disabled="deleting" @click="remove()">
+                    <span class="loading loading-spinner loading-xs" x-show="deleting"></span>
+                    <i class="ph ph-trash text-lg" x-show="!deleting"></i> 删除
+                </button>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 space-y-6">
+                <div class="card bg-base-100 shadow-sm border border-base-200">
+                    <div class="card-body p-6">
+                        <h2 class="card-title text-lg mb-4 flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                <i class="ph ph-info text-xl"></i>
+                            </div>
+                            基本信息
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 gap-6">
+                            <div class="form-control">
+                                <label class="label pt-0"><span class="label-text font-medium text-base-content/70">序列号 (Serial Number)</span></label>
+                                <div class="join w-full">
+                                    <input
+                                        id="serial-display"
+                                        class="input input-bordered join-item w-full font-mono"
+                                        readonly
+                                        value=""
+                                    />
+                                    <button class="btn join-item" type="button" data-copy-target="serial-display">复制</button>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="form-control">
+                                    <label class="label pt-0"><span class="label-text font-medium text-base-content/70">通用名称 (CN)</span></label>
+                                    <div class="input input-bordered flex items-center bg-base-200/50 font-medium select-all" x-text="cert?.subject_cn"></div>
+                                </div>
+
+                                <div class="form-control">
+                                    <label class="label pt-0"><span class="label-text font-medium text-base-content/70">密钥 ID (Key ID)</span></label>
+                                    <div class="input input-bordered flex items-center bg-base-200/50 font-mono text-sm select-all truncate" x-text="cert?.key_id || '-'"></div>
+                                </div>
+                            </div>
+
+                            <div class="form-control" x-show="getSanEntries().length">
+                                <label class="label pt-0"><span class="label-text font-medium text-base-content/70">SAN 信息</span></label>
+                                <div class="w-full rounded-lg border border-base-300 bg-base-200/40 p-3">
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-for="(sanItem, idx) in getSanEntries()" :key="idx">
+                                            <span class="badge badge-outline gap-1 py-3">
+                                                <span class="font-mono text-[11px] uppercase" x-text="sanItem.type"></span>
+                                                <span class="text-xs" x-text="sanItem.value"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="divider my-0"></div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="form-control">
+                                    <label class="label pt-0"><span class="label-text font-medium text-base-content/70">生效时间 (Not Before)</span></label>
+                                    <div class="flex items-center gap-2 p-2 rounded-lg bg-success/5 border border-success/10 text-success-content">
+                                        <i class="ph ph-calendar-check text-xl text-success"></i>
+                                        <span class="font-mono font-medium" x-text="cert?.not_before"></span>
+                                    </div>
+                                </div>
+
+                                <div class="form-control">
+                                    <label class="label pt-0"><span class="label-text font-medium text-base-content/70">过期时间 (Not After)</span></label>
+                                    <div class="flex items-center gap-2 p-2 rounded-lg bg-warning/5 border border-warning/10 text-warning-content">
+                                        <i class="ph ph-calendar-x text-xl text-warning"></i>
+                                        <span class="font-mono font-medium" x-text="cert?.not_after"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-control" x-show="cert?.revoked_at">
+                                <label class="label pt-0"><span class="label-text font-medium text-error">吊销时间 (Revoked At)</span></label>
+                                <div class="flex items-center gap-2 p-3 rounded-lg bg-error/10 border border-error/20 text-error">
+                                    <i class="ph ph-warning-octagon text-xl"></i>
+                                    <span class="font-mono font-bold" x-text="cert?.revoked_at"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-base-100 shadow-sm border border-base-200">
+                    <div class="card-body p-0">
+                        <div class="collapse collapse-arrow bg-base-100 rounded-box">
+                            <input type="checkbox" /> 
+                            <div class="collapse-title text-lg font-medium flex items-center gap-2 p-6">
+                                <div class="w-8 h-8 rounded-lg bg-neutral/10 flex items-center justify-center text-neutral">
+                                    <i class="ph ph-brackets-curly text-xl"></i>
+                                </div>
+                                元数据
+                            </div>
+                            <div class="collapse-content px-6 pb-6 min-w-0">
+                                <div class="w-full max-w-full overflow-hidden rounded-box border border-base-300 bg-base-300">
+                                    <pre class="p-4 text-xs text-base-content overflow-auto max-h-60 w-full whitespace-pre-wrap break-all"><code x-text="JSON.stringify(cert?.meta_data || {}, null, 2)"></code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6 min-w-0">
+                <div class="card bg-base-100 shadow-sm border border-base-200">
+                    <div class="card-body p-6">
+                        <h2 class="card-title text-lg mb-4 flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
+                                <i class="ph ph-code text-xl"></i>
+                            </div>
+                            关联信息
+                        </h2>
+                        <div class="overflow-x-auto">
+                            <table class="table">
+                                <tbody>
+                                    <tr class="hover">
+                                        <td class="w-1/3 text-base-content/60 font-medium">父证书 (Issuer)</td>
+                                        <td>
+                                            <template x-if="cert?.parent_id">
+                                                <a :href="`/certificates/detail?certificate_id=${cert.parent_id}`" class="btn btn-sm btn-ghost gap-2 normal-case font-mono">
+                                                    <i class="ph ph-arrow-u-up-left"></i>
+                                                    <span x-text="'ID: ' + cert.parent_id"></span>
+                                                </a>
+                                            </template>
+                                            <span x-show="!cert?.parent_id" class="text-base-content/40 italic">无 (Root CA)</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="hover">
+                                        <td class="text-base-content/60 font-medium">关联密钥</td>
+                                        <td>
+                                            <span class="font-mono text-sm" x-text="cert?.key_id || '-'"></span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card bg-base-100 shadow-sm border border-base-200">
+                    <div class="card-body p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="card-title text-lg flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                                    <i class="ph ph-link text-xl"></i>
+                                </div>
+                                证书链
+                            </h2>
+                            <button class="btn btn-xs btn-ghost text-primary" @click="loadChain()" x-show="chain.length === 0">
+                                <i class="ph ph-arrows-clockwise"></i> 加载
+                            </button>
+                        </div>
+
+                        <div x-show="chain.length === 0" class="text-center py-8 bg-base-200/30 rounded-lg border border-dashed border-base-300">
+                            <p class="text-sm text-base-content/50">点击加载查看完整证书链</p>
+                        </div>
+
+                        <div class="overflow-x-auto" x-show="chain.length > 0">
+                            <ul class="steps steps-vertical w-full">
+                                <template x-for="(node, index) in chain" :key="node.id">
+                                    <li class="step" :class="node.id === cert?.id ? 'step-primary' : ''">
+                                        <div class="text-left w-full pl-2 py-1">
+                                            <a :href="`/certificates/detail?certificate_id=${node.id}`" 
+                                               class="link link-hover block font-bold text-sm"
+                                               :class="node.id === cert?.id ? 'text-primary' : 'text-base-content/80'"
+                                               x-text="node.subject_cn">
+                                            </a>
+                                            <div class="text-xs text-base-content/50 font-mono mt-0.5" x-text="'ID: ' + node.id"></div>
+                                        </div>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
-    <div class="alert alert-error" x-show="error" x-text="error"></div>
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function certDetailPage() {
+window.certDetailPage = () => {
     return {
         cert: null,
         chain: [],
         error: '',
         deleting: false,
         certificateId: null,
+        getSanEntries() {
+            const sanRaw =
+                this.cert?.meta_data?.extensions?.san
+                ?? this.cert?.meta_data?.san
+                ?? null;
+            if (!sanRaw) return [];
+
+            if (Array.isArray(sanRaw)) {
+                return sanRaw
+                    .map((item) => {
+                        if (typeof item === 'string') {
+                            return { type: 'SAN', value: item };
+                        }
+                        if (item && typeof item === 'object') {
+                            return {
+                                type: String(item.type || item.name || 'SAN').toUpperCase(),
+                                value: String(item.value || item.name || ''),
+                            };
+                        }
+                        return null;
+                    })
+                    .filter((item) => item?.value);
+            }
+
+            if (typeof sanRaw === 'object') {
+                const entries = [];
+                Object.entries(sanRaw).forEach(([type, values]) => {
+                    if (Array.isArray(values)) {
+                        values.forEach((value) => {
+                            if (value !== null && value !== undefined && value !== '') {
+                                entries.push({ type: String(type).toUpperCase(), value: String(value) });
+                            }
+                        });
+                    }
+                });
+                return entries;
+            }
+
+            return [];
+        },
         async load() {
             this.certificateId = new URLSearchParams(window.location.search).get('certificate_id') || new URLSearchParams(window.location.search).get('id');
             if (!this.certificateId) { this.error = '缺少 certificate_id'; return; }
@@ -97,7 +324,7 @@ function certDetailPage() {
             if (!this.certificateId) return;
             try {
                 if (format === 'pem-bundle') {
-                    const confirmed = confirmAction('PEM Bundle 将包含私钥，是否继续导出？');
+                    const confirmed = await confirmAction('PEM Bundle 将包含私钥，是否继续导出？');
                     if (!confirmed) return;
                 }
                 const params = new URLSearchParams({
@@ -105,7 +332,10 @@ function certDetailPage() {
                     format,
                 });
                 if (format === 'p12') {
-                    const password = window.prompt('请输入 PKCS#12 文件密码（可选）', '');
+                    const password = await promptAction('请输入 PKCS#12 文件密码（可选）', {
+                        title: '设置 PKCS#12 密码',
+                        defaultValue: '',
+                    });
                     if (password === null) return;
                     if (password) params.set('password', password);
                 }
@@ -123,7 +353,7 @@ function certDetailPage() {
             }
         },
         async revoke() {
-            if (!confirmAction('确定要吊销此证书吗？')) return;
+            if (!await confirmAction('确定要吊销此证书吗？', { confirmClass: 'btn-warning' })) return;
             const resp = await apiFetch('/api/certificates/revoke', {
                 method: 'POST',
                 body: JSON.stringify({ certificate_id: Number(this.certificateId), reason: 'manual' })
@@ -138,8 +368,13 @@ function certDetailPage() {
             }
         },
         async remove() {
-            if (!confirmAction('确定要删除此证书吗？')) return;
-            const deleteKey = confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书');
+            if (!await confirmAction('确定要删除此证书吗？', { confirmClass: 'btn-error' })) return;
+            const deleteKey = await confirmAction('是否同时删除关联私钥？\n确定=同时删除，取消=仅删除证书', {
+                title: '关联私钥处理',
+                confirmText: '同时删除私钥',
+                cancelText: '仅删除证书',
+                confirmClass: 'btn-error',
+            });
             this.deleting = true;
             const resp = await apiFetch('/api/certificates/delete', {
                 method: 'POST',

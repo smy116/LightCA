@@ -48,6 +48,84 @@
     notify(message, "error");
   }
 
+  function showMessageBox(options = {}) {
+    const modal = document.getElementById("global-msgbox");
+    const title = document.getElementById("global-msgbox-title");
+    const message = document.getElementById("global-msgbox-message");
+    const input = document.getElementById("global-msgbox-input");
+    const confirmBtn = document.getElementById("global-msgbox-confirm");
+    const cancelBtn = document.getElementById("global-msgbox-cancel");
+
+    if (!modal || !title || !message || !confirmBtn || !cancelBtn) {
+      if (options.mode === "prompt") {
+        return Promise.resolve(window.prompt(options.message || "", options.defaultValue || ""));
+      }
+      return Promise.resolve(window.confirm(options.message || "Are you sure?"));
+    }
+
+    const mode = options.mode || "confirm";
+    title.textContent = options.title || (mode === "prompt" ? "请输入" : "请确认");
+    message.textContent = options.message || "";
+    confirmBtn.textContent = options.confirmText || "确定";
+    cancelBtn.textContent = options.cancelText || "取消";
+    confirmBtn.className = `btn ${options.confirmClass || "btn-primary"}`;
+    cancelBtn.classList.toggle("hidden", mode === "alert");
+
+    if (input) {
+      if (mode === "prompt") {
+        input.value = options.defaultValue || "";
+        input.placeholder = options.placeholder || "";
+        input.classList.remove("hidden");
+      } else {
+        input.value = "";
+        input.classList.add("hidden");
+      }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const cleanup = () => {
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+        modal.removeEventListener("close", onClose);
+      };
+
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+
+      const onConfirm = () => {
+        const value = mode === "prompt" ? input.value : true;
+        modal.close();
+        settle(value);
+      };
+
+      const onCancel = () => {
+        modal.close();
+        settle(mode === "prompt" ? null : false);
+      };
+
+      const onClose = () => {
+        settle(mode === "prompt" ? null : false);
+      };
+
+      confirmBtn.addEventListener("click", onConfirm);
+      cancelBtn.addEventListener("click", onCancel);
+      modal.addEventListener("close", onClose);
+      modal.showModal();
+      if (mode === "prompt" && input) {
+        input.focus();
+        input.select();
+      } else {
+        confirmBtn.focus();
+      }
+    });
+  }
+
   function copyText(value) {
     if (!value) return;
     navigator.clipboard.writeText(String(value));
@@ -63,11 +141,11 @@
   function getFilenameFromDisposition(disposition) {
     if (!disposition) return "download.bin";
     const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    if (utf8Match && utf8Match[1]) {
+    if (utf8Match?.[1]) {
       return decodeURIComponent(utf8Match[1]);
     }
     const simpleMatch = disposition.match(/filename="?([^";]+)"?/i);
-    if (simpleMatch && simpleMatch[1]) {
+    if (simpleMatch?.[1]) {
       return simpleMatch[1];
     }
     return "download.bin";
@@ -114,8 +192,29 @@
     return status || "未知";
   }
 
-  function confirmAction(message) {
-    return window.confirm(message || "Are you sure?");
+  async function confirmAction(message, options = {}) {
+    const result = await showMessageBox({
+      mode: "confirm",
+      message: message || "Are you sure?",
+      title: options.title || "请确认操作",
+      confirmText: options.confirmText || "确定",
+      cancelText: options.cancelText || "取消",
+      confirmClass: options.confirmClass || "btn-primary",
+    });
+    return Boolean(result);
+  }
+
+  async function promptAction(message, options = {}) {
+    return showMessageBox({
+      mode: "prompt",
+      message: message || "",
+      title: options.title || "请输入",
+      defaultValue: options.defaultValue || "",
+      placeholder: options.placeholder || "",
+      confirmText: options.confirmText || "确定",
+      cancelText: options.cancelText || "取消",
+      confirmClass: options.confirmClass || "btn-primary",
+    });
   }
 
   function requireAuth() {
@@ -165,6 +264,7 @@
     notify,
     notifySuccess,
     notifyError,
+    showMessageBox,
     copyText,
     logout,
     downloadWithAuth,
@@ -172,6 +272,7 @@
     certificateTypeLabel,
     certificateStatusLabel,
     confirmAction,
+    promptAction,
     requireAuth,
     appShell,
   };
@@ -187,4 +288,5 @@
   window.certificateTypeLabel = certificateTypeLabel;
   window.certificateStatusLabel = certificateStatusLabel;
   window.confirmAction = confirmAction;
+  window.promptAction = promptAction;
 })();

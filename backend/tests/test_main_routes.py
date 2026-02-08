@@ -46,11 +46,11 @@ class TestMainRoutes:
         response = client.get("/certificates/detail")
         assert response.status_code == 200
         html = response.text
-        assert "PEM - 标准 PEM 格式证书" in html
-        assert "PEM Chain - 完整证书链" in html
-        assert "PEM Bundle - 链 + 证书 + 私钥" in html
-        assert "DER - 二进制格式" in html
-        assert "PKCS#12 - .p12 (证书 + 私钥)" in html
+        assert "PEM (标准证书)" in html
+        assert "PEM Chain (证书链 + 私钥 ZIP)" in html
+        assert "PEM Bundle (含私钥)" in html
+        assert "DER (二进制)" in html
+        assert "PKCS#12 (含私钥)" in html
 
     def test_validation_exception_handler_shape(self, client: TestClient, auth_headers: dict):
         response = client.get(

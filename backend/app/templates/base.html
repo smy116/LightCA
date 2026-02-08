@@ -112,6 +112,21 @@
         </div>
     </div>
 
+    <dialog id="global-msgbox" class="modal">
+        <div class="modal-box max-w-md">
+            <h3 id="global-msgbox-title" class="font-bold text-lg">提示</h3>
+            <p id="global-msgbox-message" class="py-4 whitespace-pre-line"></p>
+            <input id="global-msgbox-input" class="input input-bordered w-full hidden" type="text" />
+            <div class="modal-action">
+                <button id="global-msgbox-cancel" type="button" class="btn btn-ghost">取消</button>
+                <button id="global-msgbox-confirm" type="button" class="btn btn-primary">确定</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button type="submit">close</button>
+        </form>
+    </dialog>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

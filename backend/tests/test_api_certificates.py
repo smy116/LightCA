@@ -1,3 +1,6 @@
+import io
+import zipfile
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -433,8 +436,20 @@ class TestCertificatesAPI:
         )
 
         assert export_response.status_code == 200
-        body_text = export_response.content.decode()
-        assert body_text.count("-----BEGIN CERTIFICATE-----") >= 2
+        assert "application/zip" in export_response.headers.get("content-type", "")
+        assert f"cert_{leaf_cert_id}-chain.zip" in export_response.headers.get(
+            "content-disposition", ""
+        )
+
+        archive = zipfile.ZipFile(io.BytesIO(export_response.content))
+        names = set(archive.namelist())
+        assert f"cert_{leaf_cert_id}-chain.pem" in names
+        assert f"cert_{leaf_cert_id}.key.pem" in names
+
+        chain_pem = archive.read(f"cert_{leaf_cert_id}-chain.pem").decode()
+        key_pem = archive.read(f"cert_{leaf_cert_id}.key.pem").decode()
+        assert chain_pem.count("-----BEGIN CERTIFICATE-----") >= 2
+        assert "-----BEGIN PRIVATE KEY-----" in key_pem
 
     def test_export_certificate_pem_bundle(self, client: TestClient, auth_headers: dict):
         key_response = client.post(

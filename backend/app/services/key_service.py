@@ -22,6 +22,16 @@ from app.services.crypto_service import (
 )
 
 
+class KeyInUseError(ValueError):
+    def __init__(self, certificate_id: int, subject_cn: Optional[str] = None):
+        self.certificate_id = certificate_id
+        self.subject_cn = subject_cn
+        cert_label = f"#{certificate_id}"
+        if subject_cn:
+            cert_label = f"#{certificate_id} ({subject_cn})"
+        super().__init__(f"Key is linked to certificate {cert_label}")
+
+
 def generate_key(
     db: Session,
     algorithm: KeyAlgorithm,
@@ -155,6 +165,23 @@ def delete_key(db: Session, key_id: int) -> None:
     key = db.query(Key).filter(Key.id == key_id, Key.is_deleted == False).first()
     if not key:
         return
+
+    linked_certificate = (
+        db.query(Certificate)
+        .filter(
+            Certificate.key_id == key_id,
+            Certificate.is_deleted == False,
+        )
+        .order_by(Certificate.id.desc())
+        .first()
+    )
+    if linked_certificate:
+        certificate_id = int(getattr(linked_certificate, "id"))
+        subject_cn_raw = getattr(linked_certificate, "subject_cn", None)
+        raise KeyInUseError(
+            certificate_id=certificate_id,
+            subject_cn=str(subject_cn_raw) if subject_cn_raw else None,
+        )
 
     key.is_deleted = True
     db.commit()

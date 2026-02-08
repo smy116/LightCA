@@ -37,7 +37,7 @@
 
 {% block scripts %}
 <script>
-function templateDetailPage() {
+window.templateDetailPage = () => {
     return {
         templateId: null,
         template: null,
@@ -54,7 +54,7 @@ function templateDetailPage() {
             else this.error = payload.message || payload.error?.detail || '加载失败';
         },
         async remove() {
-            if (!confirmAction('确定要删除此模板吗？')) return;
+            if (!await confirmAction('确定要删除此模板吗？')) return;
             const resp = await apiFetch('/api/templates/delete', {
                 method: 'POST',
                 body: JSON.stringify({ template_id: Number(this.templateId) })
